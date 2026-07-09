@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hanabee Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FAF7F1; --cream-deep:#F1ECE2;
+    --forest:#3B5D4E; --forest-deep:#2A453A;
+    --sage:#E7EDE6; --rose:#C98B95; --rose-deep:#B06C77;
+    --charcoal:#2B2A26; --charcoal-soft:#6B6558;
+    --gold:#BF9B57; --line:#DED6C6; --white:#FFFFFF; --danger:#B4483B;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ font-family:'Jost', sans-serif; background:var(--cream); color:var(--charcoal); min-height:100vh; }
+  h1,h2,h3{ font-family:'Cormorant Garamond', serif; }
+  ::selection{ background:var(--rose); color:var(--white); }
+
+  header.topbar{
+    background:var(--forest-deep); color:var(--cream); padding:0 28px; height:68px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .topbar-brand{ display:flex; align-items:center; gap:12px; font-family:'Cormorant Garamond'; font-size:1.5rem; }
+  .topbar-brand svg{ width:22px; height:22px; }
+  .topbar-right{ font-size:0.78rem; color:rgba(250,247,241,0.65); }
+
+  nav.tabs{
+    display:flex; gap:2px; background:var(--cream-deep); padding:0 28px;
+    border-bottom:1px solid var(--line); overflow-x:auto;
+  }
+  .tab-btn{
+    background:none; border:none; padding:15px 18px; font-family:'Jost'; font-size:0.85rem;
+    color:var(--charcoal-soft); cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap;
+  }
+  .tab-btn:hover{ color:var(--forest-deep); }
+  .tab-btn.active{ color:var(--forest-deep); border-bottom-color:var(--rose); font-weight:500; }
+
+  main{ padding:32px 28px 60px; max-width:1220px; margin:0 auto; }
+  .view{ display:none; animation:fadeIn 0.25s ease; }
+  .view.active{ display:block; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .view-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:12px; }
+  .view-title{ font-size:1.9rem; font-weight:500; color:var(--forest-deep); }
+  .date-picker{ display:flex; align-items:center; gap:10px; }
+  .date-nav-btn{
+    background:var(--white); border:1px solid var(--line); border-radius:3px; width:34px; height:34px;
+    cursor:pointer; font-size:1rem; color:var(--forest-deep); display:flex; align-items:center; justify-content:center;
+  }
+  .date-nav-btn:hover{ border-color:var(--forest); }
+
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:32px; }
+  .stat-card{ background:var(--white); border:1px solid var(--line); border-radius:4px; padding:20px 22px; }
+  .stat-card .num{ font-family:'Cormorant Garamond'; font-size:2.1rem; color:var(--forest-deep); font-weight:600; }
+  .stat-card.warn .num{ color:var(--rose-deep); }
+  .stat-card .label{ font-size:0.75rem; letter-spacing:1px; text-transform:uppercase; color:var(--charcoal-soft); margin-top:4px; }
+
+  .category-block{ margin-bottom:26px; }
+  .category-heading{
+    display:flex; align-items:center; gap:10px;
+    font-size:0.75rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--charcoal-soft);
+    margin:0 0 12px;
+  }
+  .category-heading .count{
+    background:var(--sage); color:var(--forest-deep); font-size:0.68rem; padding:1px 8px; border-radius:20px;
+  }
+  .material-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .material-card{ background:var(--white); border:1px solid var(--line); border-radius:4px; padding:16px 18px; position:relative; }
+  .material-card.low{ border-color:var(--rose); }
+  .material-card .cat{ font-size:0.68rem; letter-spacing:1px; text-transform:uppercase; color:var(--charcoal-soft); }
+  .material-card .name{ font-family:'Cormorant Garamond'; font-size:1.3rem; font-weight:600; margin:2px 0 10px; }
+  .stem-gauge{ display:flex; align-items:center; gap:10px; }
+  .stem-gauge .bar-track{ flex:1; height:5px; background:var(--sage); border-radius:3px; overflow:hidden; }
+  .stem-gauge .bar-fill{ height:100%; background:var(--forest); border-radius:3px; transition:width 0.4s ease; }
+  .material-card.low .bar-fill{ background:var(--rose-deep); }
+  .stem-gauge .qty{ font-family:'Cormorant Garamond'; font-size:1.15rem; font-weight:600; color:var(--forest-deep); white-space:nowrap; }
+  .material-card.low .qty{ color:var(--rose-deep); }
+  .low-badge{
+    position:absolute; top:14px; right:14px; font-size:0.62rem; text-transform:uppercase;
+    background:var(--rose); color:var(--white); padding:2px 7px; border-radius:2px;
+  }
+  .empty-state{ text-align:center; padding:50px 20px; color:var(--charcoal-soft); font-size:0.9rem; }
+
+  .card{ background:var(--white); border:1px solid var(--line); border-radius:4px; padding:24px 26px; }
+
+  /* Daily register table */
+  .register-table-wrap{ overflow-x:auto; }
+  table.register{ width:100%; border-collapse:collapse; min-width:760px; }
+  table.register th{
+    text-align:left; font-size:0.7rem; letter-spacing:0.8px; text-transform:uppercase; color:var(--charcoal-soft);
+    padding:10px 10px; border-bottom:1px solid var(--line); background:var(--cream-deep);
+  }
+  table.register th.num, table.register td.num{ text-align:right; }
+  table.register td{ padding:9px 10px; border-bottom:1px solid var(--cream-deep); vertical-align:middle; }
+  table.register .mat-name{ font-weight:500; }
+  table.register .mat-unit{ font-size:0.72rem; color:var(--charcoal-soft); }
+  table.register .cat-row td{
+    background:var(--cream-deep); font-size:0.7rem; letter-spacing:1px; text-transform:uppercase;
+    color:var(--charcoal-soft); padding:8px 10px; font-weight:500;
+  }
+  table.register input.reg-input{
+    width:80px; padding:7px 8px; font-size:0.85rem; text-align:right;
+    border:1px solid var(--line); border-radius:3px; background:var(--cream);
+  }
+  table.register input.reg-input:focus{ border-color:var(--forest); outline:none; }
+  table.register .opening-val, table.register .usage-val{
+    font-family:'Cormorant Garamond'; font-size:1.05rem; font-weight:600; color:var(--forest-deep);
+  }
+  table.register .usage-val.negative{ color:var(--danger); }
+  .locked-note{ font-size:0.72rem; color:var(--charcoal-soft); font-style:italic; }
+
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-grid.single{ grid-template-columns:1fr; }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field.span2{ grid-column:1 / -1; }
+  label{ font-size:0.75rem; letter-spacing:0.5px; text-transform:uppercase; color:var(--charcoal-soft); }
+  input, select, textarea{
+    font-family:'Jost'; font-size:0.92rem; padding:10px 12px; border:1px solid var(--line);
+    border-radius:3px; background:var(--cream); color:var(--charcoal); outline:none;
+  }
+  input:focus, select:focus, textarea:focus{ border-color:var(--forest); }
+
+  .btn{ font-family:'Jost'; font-size:0.85rem; letter-spacing:0.4px; padding:11px 22px; border-radius:3px; border:none; cursor:pointer; }
+  .btn-primary{ background:var(--forest); color:var(--white); }
+  .btn-primary:hover{ background:var(--forest-deep); }
+  .btn-outline{ background:transparent; border:1px solid var(--line); color:var(--charcoal); }
+  .btn-outline:hover{ border-color:var(--forest); color:var(--forest-deep); }
+  .btn-danger-text{ background:none; border:none; color:var(--danger); font-size:0.78rem; cursor:pointer; text-decoration:underline; }
+  .btn-row{ display:flex; gap:10px; margin-top:20px; align-items:center; flex-wrap:wrap; }
+
+  .mat-row{ display:flex; align-items:center; justify-content:space-between; padding:14px 4px; border-bottom:1px solid var(--line); gap:12px; flex-wrap:wrap; }
+  .mat-row:last-child{ border-bottom:none; }
+  .mat-row-main .n{ font-family:'Cormorant Garamond'; font-size:1.15rem; font-weight:600; }
+  .mat-row-main .m{ font-size:0.78rem; color:var(--charcoal-soft); }
+  .mat-row-actions{ display:flex; gap:14px; align-items:center; }
+  .mat-row-actions .stock-val{ font-family:'Cormorant Garamond'; font-size:1.2rem; font-weight:600; color:var(--forest-deep); }
+
+  .entry-type-toggle{ display:flex; gap:8px; }
+  .type-pill{
+    padding:9px 18px; border-radius:20px; border:1px solid var(--line); background:var(--white);
+    font-size:0.82rem; letter-spacing:0.3px; cursor:pointer; color:var(--charcoal-soft); transition:all 0.18s ease;
+  }
+  .type-pill.active{ background:var(--forest); border-color:var(--forest); color:var(--white); }
+  .filter-bar{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
+  .filter-bar select, .filter-bar input{ min-width:140px; }
+  table.history{ width:100%; border-collapse:collapse; }
+  table.history th{ text-align:left; font-size:0.7rem; letter-spacing:0.8px; text-transform:uppercase; color:var(--charcoal-soft); padding:10px 10px; border-bottom:1px solid var(--line); }
+  table.history th.num, table.history td.num{ text-align:right; }
+  table.history td{ padding:10px; font-size:0.85rem; border-bottom:1px solid var(--cream-deep); }
+  table.history tr:hover{ background:var(--cream-deep); }
+
+  .modal-overlay{ display:none; position:fixed; inset:0; background:rgba(43,42,38,0.45); align-items:center; justify-content:center; z-index:100; padding:20px; }
+  .modal-overlay.active{ display:flex; }
+  .modal{ background:var(--white); border-radius:4px; padding:28px 30px; max-width:420px; width:100%; }
+  .modal h3{ font-size:1.4rem; color:var(--forest-deep); margin-bottom:16px; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--forest-deep); color:var(--cream); padding:12px 22px; border-radius:4px;
+    font-size:0.85rem; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:200;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.error{ background:var(--danger); }
+
+  @media (max-width:640px){
+    .form-grid{ grid-template-columns:1fr; }
+    .stat-grid{ grid-template-columns:repeat(2, 1fr); }
+    main{ padding:24px 16px 60px; }
+    header.topbar{ padding:0 16px; }
+    nav.tabs{ padding:0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" style="min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:24px; padding:24px; background:radial-gradient(circle at 15% 20%, rgba(59,93,78,0.06), transparent 40%), radial-gradient(circle at 85% 80%, rgba(201,139,149,0.08), transparent 45%), var(--cream);">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M12 2C12 2 8 6 8 11C8 14.3 9.8 16.5 12 17.5C14.2 16.5 16 14.3 16 11C16 6 12 2 12 2Z" stroke="#3B5D4E" stroke-width="1.4"/><path d="M12 17.5V22" stroke="#3B5D4E" stroke-width="1.4"/></svg>
+    <div style="font-family:'Cormorant Garamond'; font-size:2.4rem; font-weight:500; color:var(--forest-deep);">Hanabee Inventory</div>
+  </div>
+  <div class="card" style="max-width:380px; width:100%; text-align:center;">
+    <p style="color:var(--charcoal-soft); font-size:0.92rem; line-height:1.6; margin-bottom:24px;">Sign in with Hanabee's Google account to access the stock ledger.</p>
+    <button class="btn btn-primary" id="googleSignInBtn" style="width:100%;">Sign in with Google</button>
+    <p id="loginError" style="display:none; color:var(--danger); font-size:0.85rem; margin-top:14px;">This Google account isn't authorised for Hanabee Inventory.</p>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2C12 2 8 6 8 11C8 14.3 9.8 16.5 12 17.5C14.2 16.5 16 14.3 16 11C16 6 12 2 12 2Z" stroke="#FAF7F1" stroke-width="1.4"/></svg>
+    Hanabee Inventory
+  </div>
+  <div class="topbar-right" style="display:flex; align-items:center; gap:16px;">
+    <span id="userEmailLabel"></span>
+    <button class="btn-signout" id="signOutBtn" style="background:transparent; border:1px solid rgba(250,247,241,0.35); color:var(--cream); padding:7px 14px; border-radius:3px; font-family:'Jost'; font-size:0.78rem; cursor:pointer;">Sign out</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-view="dashboard">Dashboard</button>
+  <button class="tab-btn" data-view="register">Daily Register</button>
+  <button class="tab-btn" data-view="materials">Materials</button>
+  <button class="tab-btn" data-view="history">History</button>
+</nav>
+
+<main>
+
+  <!-- ---------- DASHBOARD ---------- -->
+  <section class="view active" id="view-dashboard">
+    <div class="view-header">
+      <div class="view-title">Today's Overview</div>
+      <div class="view-date" id="todayLabel" style="color:var(--charcoal-soft); font-size:0.85rem;"></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="num" id="statMaterials">0</div><div class="label">Active materials</div></div>
+      <div class="stat-card"><div class="num" id="statDraft">0</div><div class="label">Draft materials</div></div>
+      <div class="stat-card warn"><div class="num" id="statLowStock">0</div><div class="label">Low stock</div></div>
+      <div class="stat-card"><div class="num" id="statUsageToday">0</div><div class="label">Used today</div></div>
+      <div class="stat-card"><div class="num" id="statWastageToday">0</div><div class="label">Wasted today</div></div>
+    </div>
+    <div id="dashboardByCategory"></div>
+  </section>
+
+  <!-- ---------- DAILY REGISTER ---------- -->
+  <section class="view" id="view-register">
+    <div class="view-header">
+      <div class="view-title">Daily Register</div>
+      <div class="date-picker">
+        <button class="date-nav-btn" id="regPrevDay">‹</button>
+        <input type="date" id="registerDate" />
+        <button class="date-nav-btn" id="regNextDay">›</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="register-table-wrap">
+        <table class="register" id="registerTable">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th class="num">Opening</th>
+              <th class="num">Purchase</th>
+              <th class="num">Wastage</th>
+              <th class="num">Closing (physical count)</th>
+              <th class="num">Usage (auto)</th>
+            </tr>
+          </thead>
+          <tbody id="registerTableBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saveRegisterBtn">Save Day</button>
+        <span class="locked-note">Usage = Opening + Purchase − Wastage − Closing. Enter today's actual physical count as Closing and usage is worked out for you.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- MATERIALS ---------- -->
+  <section class="view" id="view-materials">
+    <div class="view-header">
+      <div class="view-title">Materials</div>
+      <button class="btn btn-primary" id="addMaterialBtn">+ Add Material</button>
+    </div>
+    <div class="entry-type-toggle" id="materialsStatusToggle" style="margin-bottom:16px;">
+      <button class="type-pill active" data-status-filter="active">Active</button>
+      <button class="type-pill" data-status-filter="draft">Draft</button>
+      <button class="type-pill" data-status-filter="all">All</button>
+    </div>
+    <div class="card"><div id="materialsByCategory"></div></div>
+  </section>
+
+  <!-- ---------- HISTORY ---------- -->
+  <section class="view" id="view-history">
+    <div class="view-header"><div class="view-title">Ledger History</div></div>
+    <div class="filter-bar">
+      <div class="entry-type-toggle" id="historyViewToggle">
+        <button class="type-pill active" data-view-mode="detailed">Detailed</button>
+        <button class="type-pill" data-view-mode="byday">By Day</button>
+      </div>
+      <select id="filterCategory"><option value="">All categories</option></select>
+      <select id="filterMaterial"><option value="">All materials</option></select>
+      <input type="date" id="filterFrom" />
+      <input type="date" id="filterTo" />
+      <button class="btn btn-outline" id="clearFiltersBtn">Clear</button>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="history">
+          <thead>
+            <tr>
+              <th>Date</th><th>Material</th><th>Category</th>
+              <th class="num">Opening</th><th class="num">Purchase</th>
+              <th class="num">Wastage</th><th class="num">Closing</th><th class="num">Usage</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody"></tbody>
+        </table>
+        <div class="empty-state" id="historyEmptyState" style="display:none;">No ledger entries match these filters.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</div>
+
+<!-- ===================== ADD/EDIT MATERIAL MODAL ===================== -->
+<div class="modal-overlay" id="materialModalOverlay">
+  <div class="modal">
+    <h3 id="materialModalTitle">Add Material</h3>
+    <form id="materialForm">
+      <div class="form-grid single">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="matName" placeholder="e.g. Red Rose Stems" required />
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="matCategory">
+            <option value="Flower">Flower</option>
+            <option value="Fillers">Fillers</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Unit</label>
+          <select id="matUnit">
+            <option value="stems">stems</option>
+            <option value="bunches">bunches</option>
+          </select>
+        </div>
+        <div class="field" id="matInitialStockField">
+          <label>Opening stock (as of first day tracked)</label>
+          <input type="number" id="matInitialStock" min="0" step="1" value="0" />
+        </div>
+        <div class="field">
+          <label>Low stock alert threshold</label>
+          <input type="number" id="matReorderLevel" min="0" step="1" value="10" />
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="matStatus">
+            <option value="active">Active — tracked in Daily Register</option>
+            <option value="draft">Draft — out of stock / paused</option>
+          </select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary" id="materialSaveBtn">Save Material</button>
+        <button type="button" class="btn btn-outline" id="materialModalCancel">Cancel</button>
+        <button type="button" class="btn-danger-text" id="materialDeleteBtn" style="display:none; margin-left:auto;">Delete material</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+  onSnapshot, query, where, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ============================================================
+   FIREBASE CONFIG — hanabee-inventory project
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyBTcnPhOEXzUN3zfnQnM3fYlpqxJeANGmM",
+  authDomain: "hanabee-inventory.firebaseapp.com",
+  projectId: "hanabee-inventory",
+  storageBucket: "hanabee-inventory.firebasestorage.app",
+  messagingSenderId: "137129512888",
+  appId: "1:137129512888:web:68e181b61d5c58c246c94d"
+};
+
+// Authorised Google accounts — add every email that should be able to sign in.
+const AUTHORISED_EMAILS = [
+  "hello.hanabee@gmail.com"
+];
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+const MATERIALS_COL = "hb_materials";
+const REGISTERS_COL = "hb_registers";
+let currentUser = null;
+
+/* ============================================================
+   Ledger model per material, per day:
+     opening  = previous day's closing (chained), or material's
+                initialStock if this is the first recorded day
+     closing  = the ACTUAL physical stock count you enter (ground truth)
+     usage    = opening + purchase − wastage − closing   (derived)
+
+   opening/usage are computed client-side every time data loads —
+   only purchase/wastage/closing are ever written to Firestore.
+   Editing/deleting a day recalculates every later day for that
+   material, since each day's opening depends on the one before it.
+   ============================================================ */
+const CATEGORIES = ["Flower", "Fillers"];
+
+let materials = [];
+let registers = [];
+
+let editingMaterialId = null;
+let historyViewMode = "detailed";
+
+const $ = (id) => document.getElementById(id);
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function addDays(iso, n){
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function showToast(msg, isError=false){
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.toggle("error", isError);
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 2600);
+}
+function fmtNum(n){ return Math.round(Number(n)||0).toLocaleString('en-IN'); }
+function fmtDate(iso){
+  if(!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+/* ---------- AUTH ---------- */
+$("googleSignInBtn").addEventListener("click", async () => {
+  try{ await signInWithPopup(auth, provider); }
+  catch(e){ console.error(e); showToast("Sign-in failed. Try again.", true); }
+});
+$("signOutBtn").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, (user) => {
+  const loginError = $("loginError");
+  if(user){
+    if(!AUTHORISED_EMAILS.includes(user.email)){
+      loginError.style.display = "block";
+      signOut(auth);
+      return;
+    }
+    loginError.style.display = "none";
+    currentUser = user;
+    $("loginScreen").style.display = "none";
+    $("app").style.display = "block";
+    $("userEmailLabel").textContent = user.email;
+    startListeners();
+  }else{
+    currentUser = null;
+    $("app").style.display = "none";
+    $("loginScreen").style.display = "flex";
+  }
+});
+
+/* ---------- FIRESTORE LISTENERS ---------- */
+function startListeners(){
+  $("todayLabel").textContent = fmtDate(todayISO());
+  $("registerDate").value = todayISO();
+
+  onSnapshot(collection(db, MATERIALS_COL), (snap) => {
+    materials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    recalcAll();
+    renderAll();
+  }, (err) => { console.error(err); showToast("Couldn't load materials.", true); });
+
+  onSnapshot(collection(db, REGISTERS_COL), (snap) => {
+    registers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    recalcAll();
+    renderAll();
+  }, (err) => { console.error(err); showToast("Couldn't load ledger history.", true); });
+}
+
+/* ---------- ledger engine ---------- */
+function getRegistersForMaterial(materialId){
+  return registers.filter(r => r.materialId === materialId).sort((a,b) => a.date < b.date ? -1 : 1);
+}
+function getRegister(materialId, date){
+  return registers.find(r => r.materialId === materialId && r.date === date);
+}
+// Recompute opening/usage for every register of a material, in date order.
+// Closing is treated as ground truth (the physical count entered that day);
+// usage is back-calculated from it.
+function recalcMaterial(materialId){
+  const material = materials.find(m => m.id === materialId);
+  const chain = getRegistersForMaterial(materialId);
+  let running = material ? Number(material.initialStock||0) : 0;
+  chain.forEach(r => {
+    r.opening = Math.round(running);
+    r.purchase = Math.round(Number(r.purchase||0));
+    r.wastage = Math.round(Number(r.wastage||0));
+    r.closing = Math.round(Number(r.closing||0));
+    r.usage = r.opening + r.purchase - r.wastage - r.closing;
+    running = r.closing;
+  });
+}
+function recalcAll(){ materials.forEach(m => recalcMaterial(m.id)); }
+function currentStockOf(materialId){
+  const chain = getRegistersForMaterial(materialId);
+  if(chain.length === 0) return materials.find(m=>m.id===materialId)?.initialStock || 0;
+  return chain[chain.length-1].closing;
+}
+function openingForDate(materialId, date){
+  const existing = getRegister(materialId, date);
+  if(existing) return existing.opening;
+  const chain = getRegistersForMaterial(materialId).filter(r => r.date < date);
+  if(chain.length === 0) return materials.find(m=>m.id===materialId)?.initialStock || 0;
+  return chain[chain.length-1].closing;
+}
+function materialsByCategory(list){
+  const source = list || materials;
+  const groups = {};
+  CATEGORIES.forEach(c => groups[c] = []);
+  source.forEach(m => {
+    const cat = CATEGORIES.includes(m.category) ? m.category : CATEGORIES[0];
+    groups[cat].push(m);
+  });
+  return groups;
+}
+function isActive(m){ return (m.status || "active") === "active"; }
+
+/* ---------- NAV ---------- */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    btn.classList.add("active");
+    $("view-" + btn.dataset.view).classList.add("active");
+    if(btn.dataset.view === "register") renderRegisterTable();
+  });
+});
+
+/* ---------- DASHBOARD ---------- */
+function renderDashboard(){
+  const activeMaterials = materials.filter(isActive);
+  const draftCount = materials.length - activeMaterials.length;
+
+  $("statMaterials").textContent = activeMaterials.length;
+  $("statDraft").textContent = draftCount;
+  const low = activeMaterials.filter(m => currentStockOf(m.id) <= Number(m.reorderLevel ?? 0));
+  $("statLowStock").textContent = low.length;
+
+  const today = todayISO();
+  const activeIds = new Set(activeMaterials.map(m => m.id));
+  const usageToday = registers.filter(r => r.date === today && activeIds.has(r.materialId)).reduce((s,r)=>s+Number(r.usage||0),0);
+  const wastageToday = registers.filter(r => r.date === today && activeIds.has(r.materialId)).reduce((s,r)=>s+Number(r.wastage||0),0);
+  $("statUsageToday").textContent = fmtNum(usageToday);
+  $("statWastageToday").textContent = fmtNum(wastageToday);
+
+  const wrap = $("dashboardByCategory");
+  if(activeMaterials.length === 0){
+    wrap.innerHTML = `<div class="empty-state">No active materials yet. Add one, or mark a draft material active, under the Materials tab.</div>`;
+    return;
+  }
+  const groups = materialsByCategory(activeMaterials);
+  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => `
+    <div class="category-block">
+      <p class="category-heading">${cat} <span class="count">${groups[cat].length}</span></p>
+      <div class="material-grid">
+        ${groups[cat].map(m => {
+          const stock = currentStockOf(m.id);
+          const reorder = Number(m.reorderLevel||0);
+          const isLow = stock <= reorder;
+          const pct = reorder > 0 ? Math.min(100, (stock/(reorder*3))*100) : Math.min(100, stock);
+          return `
+            <div class="material-card ${isLow ? 'low' : ''}">
+              ${isLow ? '<span class="low-badge">Low</span>' : ''}
+              <div class="cat">${m.category||''}</div>
+              <div class="name">${m.name}</div>
+              <div class="stem-gauge">
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <div class="qty">${fmtNum(stock)} ${m.unit||''}</div>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+/* ---------- DAILY REGISTER ---------- */
+$("regPrevDay").addEventListener("click", () => {
+  $("registerDate").value = addDays($("registerDate").value, -1);
+  renderRegisterTable();
+});
+$("regNextDay").addEventListener("click", () => {
+  $("registerDate").value = addDays($("registerDate").value, 1);
+  renderRegisterTable();
+});
+$("registerDate").addEventListener("change", renderRegisterTable);
+
+function renderRegisterTable(){
+  const date = $("registerDate").value || todayISO();
+  const tbody = $("registerTableBody");
+  const activeMaterials = materials.filter(isActive);
+
+  if(activeMaterials.length === 0){
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No active materials to log. Add one, or mark a draft material active, under the Materials tab.</div></td></tr>`;
+    return;
+  }
+
+  const groups = materialsByCategory(activeMaterials);
+  let html = "";
+  CATEGORIES.filter(c => groups[c].length > 0).forEach(cat => {
+    html += `<tr class="cat-row"><td colspan="6">${cat}</td></tr>`;
+    groups[cat].forEach(m => {
+      const existing = getRegister(m.id, date);
+      const opening = openingForDate(m.id, date);
+      const purchase = existing ? existing.purchase : 0;
+      const wastage = existing ? existing.wastage : 0;
+      const closing = existing ? existing.closing : opening;
+      const usage = opening + Number(purchase) - Number(wastage) - Number(closing);
+      html += `
+        <tr data-material="${m.id}">
+          <td>
+            <div class="mat-name">${m.name}</div>
+            <div class="mat-unit">${m.unit||''}</div>
+          </td>
+          <td class="num"><span class="opening-val" data-opening>${opening}</span></td>
+          <td class="num"><input class="reg-input" type="number" step="1" data-field="purchase" value="${purchase}" /></td>
+          <td class="num"><input class="reg-input" type="number" step="1" data-field="wastage" value="${wastage}" /></td>
+          <td class="num"><input class="reg-input" type="number" step="1" data-field="closing" value="${closing}" /></td>
+          <td class="num"><span class="usage-val ${usage < 0 ? 'negative' : ''}" data-usage>${fmtNum(usage)}</span></td>
+        </tr>`;
+    });
+  });
+  tbody.innerHTML = html;
+
+  // live-recompute usage as the person types, without saving yet
+  tbody.querySelectorAll("tr[data-material]").forEach(row => {
+    const openingEl = row.querySelector("[data-opening]");
+    const usageEl = row.querySelector("[data-usage]");
+    const opening = Number(openingEl.textContent);
+    row.querySelectorAll(".reg-input").forEach(input => {
+      input.addEventListener("input", () => {
+        const p = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
+        const w = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
+        const c = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
+        const u = opening + p - w - c;
+        usageEl.textContent = fmtNum(u);
+        usageEl.classList.toggle("negative", u < 0);
+      });
+    });
+  });
+}
+
+$("saveRegisterBtn").addEventListener("click", async () => {
+  const date = $("registerDate").value || todayISO();
+  const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
+  try{
+    await Promise.all(rows.map(row => {
+      const materialId = row.dataset.material;
+      const purchase = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
+      const wastage = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
+      const closing = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
+      const regId = `${materialId}_${date}`;
+      return setDoc(doc(db, REGISTERS_COL, regId), { materialId, date, purchase, wastage, closing }, { merge: true });
+    }));
+    showToast(`Saved register for ${fmtDate(date)}.`);
+    // onSnapshot will refresh local state and re-render automatically.
+  }catch(err){
+    console.error("Failed to save register:", err);
+    showToast("Couldn't save today's register. Try again.", true);
+  }
+});
+
+/* ---------- MATERIALS CRUD ---------- */
+let materialsStatusFilter = "active";
+
+document.querySelectorAll("#materialsStatusToggle .type-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#materialsStatusToggle .type-pill").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    materialsStatusFilter = btn.dataset.statusFilter;
+    renderMaterialsList();
+  });
+});
+
+function renderMaterialsList(){
+  const wrap = $("materialsByCategory");
+  const filtered = materials.filter(m => {
+    if(materialsStatusFilter === "all") return true;
+    return (m.status || "active") === materialsStatusFilter;
+  });
+  if(filtered.length === 0){
+    wrap.innerHTML = materials.length === 0
+      ? `<div class="empty-state">No materials yet. Click "Add Material" to start tracking flowers and stems.</div>`
+      : `<div class="empty-state">No ${materialsStatusFilter} materials.</div>`;
+    return;
+  }
+  const groups = materialsByCategory(filtered);
+  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => `
+    <div class="category-block">
+      <p class="category-heading">${cat} <span class="count">${groups[cat].length}</span></p>
+      ${groups[cat].map(m => {
+        const draft = (m.status || "active") === "draft";
+        return `
+        <div class="mat-row">
+          <div class="mat-row-main">
+            <div class="n">${m.name} ${draft ? '<span class="low-badge" style="position:static; display:inline-block; background:var(--charcoal-soft);">Draft</span>' : ''}</div>
+            <div class="m">${m.unit||''} · low-stock alert at ${fmtNum(m.reorderLevel||0)}</div>
+          </div>
+          <div class="mat-row-actions">
+            <div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div>
+            <button class="btn btn-outline" data-toggle-status="${m.id}">${draft ? "Mark Active" : "Mark Draft"}</button>
+            <button class="btn btn-outline" data-edit="${m.id}">Edit</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  `).join("");
+  wrap.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openMaterialModal(btn.dataset.edit)));
+  wrap.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", () => toggleMaterialStatus(btn.dataset.toggleStatus)));
+}
+
+async function toggleMaterialStatus(materialId){
+  const m = materials.find(x => x.id === materialId);
+  if(!m) return;
+  const newStatus = (m.status || "active") === "active" ? "draft" : "active";
+  try{
+    await updateDoc(doc(db, MATERIALS_COL, materialId), { status: newStatus });
+    showToast(`${m.name} marked ${newStatus}.`);
+  }catch(err){
+    console.error(err);
+    showToast("Couldn't update status. Try again.", true);
+  }
+}
+
+$("addMaterialBtn").addEventListener("click", () => openMaterialModal(null));
+$("materialModalCancel").addEventListener("click", closeMaterialModal);
+
+function openMaterialModal(materialId){
+  editingMaterialId = materialId || null;
+  const initialStockField = $("matInitialStockField");
+  const deleteBtn = $("materialDeleteBtn");
+  $("materialForm").reset();
+
+  if(materialId){
+    const m = materials.find(x => x.id === materialId);
+    if(!m){ showToast("Couldn't find that material.", true); return; }
+    const hasHistory = getRegistersForMaterial(materialId).length > 0;
+    $("materialModalTitle").textContent = "Edit Material";
+    $("matName").value = m.name || "";
+    $("matCategory").value = CATEGORIES.includes(m.category) ? m.category : "Other";
+    $("matUnit").value = m.unit || "stems";
+    $("matReorderLevel").value = m.reorderLevel ?? 10;
+    $("matInitialStock").value = m.initialStock ?? 0;
+    $("matStatus").value = m.status || "active";
+    initialStockField.style.display = hasHistory ? "none" : "flex";
+    deleteBtn.style.display = "inline-block";
+  }else{
+    $("materialModalTitle").textContent = "Add Material";
+    $("matInitialStock").value = 0;
+    $("matReorderLevel").value = 10;
+    $("matStatus").value = "active";
+    initialStockField.style.display = "flex";
+    deleteBtn.style.display = "none";
+  }
+  $("materialModalOverlay").classList.add("active");
+}
+function closeMaterialModal(){
+  $("materialModalOverlay").classList.remove("active");
+  editingMaterialId = null;
+}
+
+$("materialForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveMaterial();
+});
+
+async function saveMaterial(){
+  const name = $("matName").value.trim();
+  if(!name){ showToast("Give the material a name first.", true); return; }
+
+  const category = $("matCategory").value;
+  const unit = $("matUnit").value;
+  const reorderLevel = Math.round(parseFloat($("matReorderLevel").value || 0));
+  const initialStockVisible = $("matInitialStockField").style.display !== "none";
+  const initialStock = Math.round(parseFloat($("matInitialStock").value || 0));
+  const status = $("matStatus").value === "draft" ? "draft" : "active";
+
+  try{
+    if(editingMaterialId){
+      const m = materials.find(x => x.id === editingMaterialId);
+      if(!m){ showToast("That material no longer exists.", true); closeMaterialModal(); return; }
+      const updates = { name, category, unit, reorderLevel, status };
+      if(initialStockVisible){ updates.initialStock = initialStock; }
+      await updateDoc(doc(db, MATERIALS_COL, editingMaterialId), updates);
+      showToast("Material updated.");
+    }else{
+      await addDoc(collection(db, MATERIALS_COL), { name, category, unit, initialStock, reorderLevel, status });
+      showToast("Material added.");
+    }
+    closeMaterialModal();
+  }catch(err){
+    console.error("Failed to save material:", err);
+    showToast("Something went wrong saving that — try again.", true);
+  }
+}
+
+$("materialDeleteBtn").addEventListener("click", async () => {
+  if(!editingMaterialId) return;
+  if(!confirm("Delete this material? Its ledger history will be removed too.")) return;
+  const materialId = editingMaterialId;
+  try{
+    const relatedRegs = await getDocs(query(collection(db, REGISTERS_COL), where("materialId", "==", materialId)));
+    await Promise.all(relatedRegs.docs.map(d => deleteDoc(d.ref)));
+    await deleteDoc(doc(db, MATERIALS_COL, materialId));
+    showToast("Material deleted.");
+    closeMaterialModal();
+  }catch(err){
+    console.error("Failed to delete material:", err);
+    showToast("Couldn't delete material. Try again.", true);
+  }
+});
+
+/* ---------- HISTORY ---------- */
+function renderFilterOptions(){
+  $("filterCategory").innerHTML = `<option value="">All categories</option>` +
+    CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+  $("filterMaterial").innerHTML = `<option value="">All materials</option>` +
+    materials.map(m => `<option value="${m.id}">${m.name}</option>`).join("");
+}
+["filterCategory","filterMaterial","filterFrom","filterTo"].forEach(id => $(id).addEventListener("change", renderHistory));
+$("clearFiltersBtn").addEventListener("click", () => {
+  $("filterCategory").value = ""; $("filterMaterial").value = ""; $("filterFrom").value = ""; $("filterTo").value = "";
+  renderHistory();
+});
+
+document.querySelectorAll('#historyViewToggle .type-pill').forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll('#historyViewToggle .type-pill').forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    historyViewMode = btn.dataset.viewMode;
+    renderHistory();
+  });
+});
+
+function renderHistory(){
+  const fCategory = $("filterCategory").value;
+  const fMaterial = $("filterMaterial").value;
+  const fFrom = $("filterFrom").value;
+  const fTo = $("filterTo").value;
+
+  let rows = registers.filter(r => {
+    const m = materials.find(x => x.id === r.materialId);
+    if(fCategory && (!m || m.category !== fCategory)) return false;
+    if(fMaterial && r.materialId !== fMaterial) return false;
+    if(fFrom && r.date < fFrom) return false;
+    if(fTo && r.date > fTo) return false;
+    return true;
+  }).slice().sort((a,b) => a.date < b.date ? 1 : -1);
+
+  const theadRow = document.querySelector("table.history thead tr");
+  $("historyEmptyState").style.display = rows.length ? "none" : "block";
+
+  if(historyViewMode === "byday"){
+    theadRow.innerHTML = `
+      <th>Date</th><th class="num">Materials logged</th>
+      <th class="num">Opening (total)</th><th class="num">Purchase</th>
+      <th class="num">Wastage</th><th class="num">Closing (total)</th><th class="num">Usage</th>`;
+
+    const byDate = {};
+    rows.forEach(r => {
+      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, wastage:0, closing:0, usage:0 };
+      const d = byDate[r.date];
+      d.count += 1;
+      d.opening += Number(r.opening||0);
+      d.purchase += Number(r.purchase||0);
+      d.wastage += Number(r.wastage||0);
+      d.closing += Number(r.closing||0);
+      d.usage += Number(r.usage||0);
+    });
+    const dates = Object.keys(byDate).sort((a,b) => a < b ? 1 : -1);
+    $("historyEmptyState").style.display = dates.length ? "none" : "block";
+    $("historyTableBody").innerHTML = dates.map(date => {
+      const d = byDate[date];
+      return `
+        <tr>
+          <td>${fmtDate(date)}</td>
+          <td class="num">${d.count}</td>
+          <td class="num">${fmtNum(d.opening)}</td>
+          <td class="num">${fmtNum(d.purchase)}</td>
+          <td class="num">${fmtNum(d.wastage)}</td>
+          <td class="num">${fmtNum(d.closing)}</td>
+          <td class="num">${fmtNum(d.usage)}</td>
+        </tr>`;
+    }).join("");
+    return;
+  }
+
+  theadRow.innerHTML = `
+    <th>Date</th><th>Material</th><th>Category</th>
+    <th class="num">Opening</th><th class="num">Purchase</th>
+    <th class="num">Wastage</th><th class="num">Closing</th><th class="num">Usage</th>`;
+
+  $("historyTableBody").innerHTML = rows.map(r => {
+    const m = materials.find(x => x.id === r.materialId);
+    return `
+      <tr>
+        <td>${fmtDate(r.date)}</td>
+        <td>${m ? m.name : '(deleted)'}</td>
+        <td>${m ? m.category : ''}</td>
+        <td class="num">${fmtNum(r.opening)}</td>
+        <td class="num">${fmtNum(r.purchase)}</td>
+        <td class="num">${fmtNum(r.wastage)}</td>
+        <td class="num">${fmtNum(r.closing)}</td>
+        <td class="num">${fmtNum(r.usage)}</td>
+      </tr>`;
+  }).join("");
+}
+
+/* ---------- INIT ---------- */
+function renderAll(){
+  renderFilterOptions();
+  renderDashboard();
+  renderRegisterTable();
+  renderMaterialsList();
+  renderHistory();
+}
+</script>
+</body>
+</html>
