@@ -82,6 +82,30 @@
     position:absolute; top:14px; right:14px; font-size:0.62rem; text-transform:uppercase;
     background:var(--rose); color:var(--white); padding:2px 7px; border-radius:2px;
   }
+  .material-card{ cursor:pointer; transition:box-shadow 0.15s ease, transform 0.15s ease; }
+  .material-card:hover{ box-shadow:0 8px 20px -12px rgba(43,42,38,0.3); transform:translateY(-1px); }
+  .variant-count{ font-size:0.72rem; color:var(--charcoal-soft); margin-top:2px; }
+  .age-badge{
+    display:inline-block; font-size:0.62rem; letter-spacing:0.4px; text-transform:uppercase;
+    padding:2px 8px; border-radius:10px; margin-top:8px;
+  }
+  .age-badge.fresh{ background:var(--sage); color:var(--forest-deep); }
+  .age-badge.aging{ background:#F3E9D2; color:#8A6A24; }
+  .age-badge.expired{ background:#F5DEDF; color:var(--rose-deep); }
+  .age-badge.unknown{ background:var(--cream-deep); color:var(--charcoal-soft); }
+
+  .variant-modal-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 0; border-bottom:1px solid var(--cream-deep);
+  }
+  .variant-modal-row:last-child{ border-bottom:none; }
+  .variant-modal-row .vn{ font-family:'Cormorant Garamond'; font-size:1.15rem; font-weight:600; }
+  .variant-modal-row .vs{ font-family:'Cormorant Garamond'; font-size:1.15rem; font-weight:600; color:var(--forest-deep); text-align:right; }
+  .batch-list{ margin-top:6px; }
+  .batch-row{
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    font-size:0.78rem; color:var(--charcoal-soft); padding:3px 0;
+  }
   .empty-state{ text-align:center; padding:50px 20px; color:var(--charcoal-soft); font-size:0.9rem; }
 
   .card{ background:var(--white); border:1px solid var(--line); border-radius:4px; padding:24px 26px; }
@@ -316,7 +340,12 @@
       <div class="form-grid single">
         <div class="field">
           <label>Name</label>
-          <input type="text" id="matName" placeholder="e.g. Red Rose Stems" required />
+          <input type="text" id="matName" placeholder="e.g. Chrysanthemum Green" required />
+        </div>
+        <div class="field">
+          <label>Variant group (optional)</label>
+          <input type="text" id="matGroupName" placeholder="e.g. Chrysanthemum" />
+          <span style="font-size:0.72rem; color:var(--charcoal-soft);">Group variants of the same flower together on the dashboard — e.g. "Chrysanthemum" for Green, Yellow, Green Button.</span>
         </div>
         <div class="field">
           <label>Category</label>
@@ -357,6 +386,17 @@
   </div>
 </div>
 
+<!-- ===================== VARIANT GROUP / BATCH AGE MODAL ===================== -->
+<div class="modal-overlay" id="groupModalOverlay">
+  <div class="modal" style="max-width:480px;">
+    <h3 id="groupModalTitle">Group</h3>
+    <div id="groupModalBody"></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-outline" id="groupModalClose">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -383,7 +423,7 @@ const firebaseConfig = {
 
 // Authorised Google accounts — add every email that should be able to sign in.
 const AUTHORISED_EMAILS = [
-  "hello.hanabee@gmail.com"
+  "REPLACE_WITH_HANABEE_EMAIL@gmail.com"
 ];
 
 const app = initializeApp(firebaseConfig);
@@ -530,6 +570,75 @@ function materialsByCategory(list){
 }
 function isActive(m){ return (m.status || "active") === "active"; }
 
+// Groups a list of materials by their variant group — materials sharing the
+// same groupName (e.g. "Chrysanthemum") are treated as one dashboard tile.
+// A material with no groupName is its own group of one, keyed by its own name.
+function groupKeyOf(m){ return (m.groupName && m.groupName.trim()) || m.name; }
+function materialsByGroup(list){
+  const groups = {};
+  (list || materials).forEach(m => {
+    const key = groupKeyOf(m);
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(m);
+  });
+  return groups;
+}
+
+/* ---------- FEFO batch-age engine ----------
+   Every purchase already has a date (from the Daily Register), so we can
+   work out how old any remaining stock is without any new data entry.
+   We simulate first-expired-first-out: each day, that day's purchase becomes
+   a new "batch"; that day's total outflow (usage + wastage) is drawn from
+   the OLDEST batch first. What's left in each batch, and how many days old
+   it is, tells you exactly what to sell first.
+   Pre-tracking opening stock (material.initialStock) is treated as one
+   batch of unknown age — since it predates the ledger, it's always oldest. */
+const SHELF_LIFE_DAYS = 6;
+
+function getBatchesForMaterial(materialId){
+  const material = materials.find(m => m.id === materialId);
+  const chain = getRegistersForMaterial(materialId); // ascending by date
+  let batches = [];
+
+  if(material && Number(material.initialStock) > 0){
+    batches.push({ date: null, qty: Number(material.initialStock) });
+  }
+
+  chain.forEach(r => {
+    if(Number(r.purchase) > 0){
+      batches.push({ date: r.date, qty: Number(r.purchase) });
+    }
+    let outflow = Math.max(0, Number(r.opening||0) + Number(r.purchase||0) - Number(r.closing||0));
+    let i = 0;
+    while(outflow > 0.0001 && i < batches.length){
+      const take = Math.min(batches[i].qty, outflow);
+      batches[i].qty -= take;
+      outflow -= take;
+      i++;
+    }
+    batches = batches.filter(b => b.qty > 0.0001);
+  });
+
+  return batches.map(b => {
+    const ageDays = b.date ? Math.floor((new Date(todayISO()+"T00:00:00") - new Date(b.date+"T00:00:00")) / 86400000) : null;
+    let status = "unknown";
+    if(ageDays !== null){
+      status = ageDays >= SHELF_LIFE_DAYS ? "expired" : ageDays >= SHELF_LIFE_DAYS - 2 ? "aging" : "fresh";
+    }
+    return { date: b.date, qty: Math.round(b.qty), ageDays, status };
+  });
+}
+// Oldest remaining batch for a material — drives the age badge shown on cards.
+function oldestBatchFor(materialId){
+  const batches = getBatchesForMaterial(materialId);
+  if(batches.length === 0) return null;
+  // batches are already oldest-first (chronological build order)
+  return batches[0];
+}
+function batchStatusLabel(status){
+  return { fresh:"Fresh", aging:"Push Soon", expired:"Push First", unknown:"Age Unknown" }[status] || "";
+}
+
 /* ---------- NAV ---------- */
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -564,30 +673,85 @@ function renderDashboard(){
     return;
   }
   const groups = materialsByCategory(activeMaterials);
-  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => `
+  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => {
+    const variantGroups = materialsByGroup(groups[cat]);
+    const groupKeys = Object.keys(variantGroups).sort((a,b) => a.localeCompare(b));
+    return `
     <div class="category-block">
       <p class="category-heading">${cat} <span class="count">${groups[cat].length}</span></p>
       <div class="material-grid">
-        ${groups[cat].map(m => {
-          const stock = currentStockOf(m.id);
-          const reorder = Number(m.reorderLevel||0);
-          const isLow = stock <= reorder;
-          const pct = reorder > 0 ? Math.min(100, (stock/(reorder*3))*100) : Math.min(100, stock);
+        ${groupKeys.map(key => {
+          const variants = variantGroups[key];
+          const totalStock = variants.reduce((s,m) => s + currentStockOf(m.id), 0);
+          const isLow = variants.some(m => currentStockOf(m.id) <= Number(m.reorderLevel||0));
+          const reorderSum = variants.reduce((s,m) => s + Number(m.reorderLevel||0), 0);
+          const pct = reorderSum > 0 ? Math.min(100, (totalStock/(reorderSum*3))*100) : Math.min(100, totalStock);
+          const oldest = variants
+            .map(m => oldestBatchFor(m.id))
+            .filter(Boolean)
+            .sort((a,b) => (b.ageDays ?? 999) - (a.ageDays ?? 999))[0];
+          const unit = variants[0].unit || '';
           return `
-            <div class="material-card ${isLow ? 'low' : ''}">
+            <div class="material-card ${isLow ? 'low' : ''}" data-group-card="${cat}::${key}">
               ${isLow ? '<span class="low-badge">Low</span>' : ''}
-              <div class="cat">${m.category||''}</div>
-              <div class="name">${m.name}</div>
+              <div class="cat">${cat}</div>
+              <div class="name">${key}</div>
+              ${variants.length > 1 ? `<div class="variant-count">${variants.length} variants</div>` : ''}
               <div class="stem-gauge">
                 <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
-                <div class="qty">${fmtNum(stock)} ${m.unit||''}</div>
+                <div class="qty">${fmtNum(totalStock)} ${unit}</div>
               </div>
+              ${oldest ? `<span class="age-badge ${oldest.status}">${batchStatusLabel(oldest.status)}${oldest.ageDays!==null ? ' · '+oldest.ageDays+'d' : ''}</span>` : ''}
             </div>`;
         }).join("")}
       </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
+
+  wrap.querySelectorAll("[data-group-card]").forEach(card => {
+    card.addEventListener("click", () => {
+      const [cat, key] = card.dataset.groupCard.split("::");
+      openGroupModal(cat, key);
+    });
+  });
 }
+
+/* ---------- GROUP / BATCH DETAIL MODAL ---------- */
+function openGroupModal(category, groupKey){
+  const variants = materials.filter(m => isActive(m) && (CATEGORIES.includes(m.category) ? m.category : CATEGORIES[0]) === category && groupKeyOf(m) === groupKey);
+  if(variants.length === 0) return;
+
+  $("groupModalTitle").textContent = groupKey;
+  $("groupModalBody").innerHTML = variants.map(m => {
+    const stock = currentStockOf(m.id);
+    const batchesOldestFirst = getBatchesForMaterial(m.id);
+    return `
+      <div class="variant-modal-row" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="vn">${m.name}</div>
+          <div class="vs">${fmtNum(stock)} ${m.unit||''}</div>
+        </div>
+        <div class="batch-list">
+          ${batchesOldestFirst.length === 0
+            ? `<div class="batch-row"><span>No stock recorded yet</span></div>`
+            : batchesOldestFirst.map(b => `
+              <div class="batch-row">
+                <span>${b.date ? fmtDate(b.date) : 'Before tracking started'}${b.ageDays!==null ? ' · '+b.ageDays+'d old' : ''}</span>
+                <span>
+                  <span class="age-badge ${b.status}" style="margin-top:0;">${batchStatusLabel(b.status)}</span>
+                  ${fmtNum(b.qty)} ${m.unit||''}
+                </span>
+              </div>`).join("")
+          }
+        </div>
+      </div>`;
+  }).join("");
+  $("groupModalOverlay").classList.add("active");
+}
+$("groupModalClose").addEventListener("click", () => {
+  $("groupModalOverlay").classList.remove("active");
+});
 
 /* ---------- DAILY REGISTER ---------- */
 $("regPrevDay").addEventListener("click", () => {
@@ -700,26 +864,36 @@ function renderMaterialsList(){
     return;
   }
   const groups = materialsByCategory(filtered);
-  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => `
+  wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => {
+    const variantGroups = materialsByGroup(groups[cat]);
+    const groupKeys = Object.keys(variantGroups).sort((a,b) => a.localeCompare(b));
+    return `
     <div class="category-block">
       <p class="category-heading">${cat} <span class="count">${groups[cat].length}</span></p>
-      ${groups[cat].map(m => {
-        const draft = (m.status || "active") === "draft";
-        return `
-        <div class="mat-row">
-          <div class="mat-row-main">
-            <div class="n">${m.name} ${draft ? '<span class="low-badge" style="position:static; display:inline-block; background:var(--charcoal-soft);">Draft</span>' : ''}</div>
-            <div class="m">${m.unit||''} · low-stock alert at ${fmtNum(m.reorderLevel||0)}</div>
-          </div>
-          <div class="mat-row-actions">
-            <div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div>
-            <button class="btn btn-outline" data-toggle-status="${m.id}">${draft ? "Mark Active" : "Mark Draft"}</button>
-            <button class="btn btn-outline" data-edit="${m.id}">Edit</button>
-          </div>
-        </div>`;
+      ${groupKeys.map(key => {
+        const variants = variantGroups[key];
+        const groupLabel = variants.length > 1 ? `<div style="font-size:0.72rem; letter-spacing:0.5px; text-transform:uppercase; color:var(--charcoal-soft); margin:10px 0 2px;">${key}</div>` : '';
+        return groupLabel + variants.map(m => {
+          const draft = (m.status || "active") === "draft";
+          const oldest = oldestBatchFor(m.id);
+          return `
+          <div class="mat-row">
+            <div class="mat-row-main">
+              <div class="n">${m.name} ${draft ? '<span class="low-badge" style="position:static; display:inline-block; background:var(--charcoal-soft);">Draft</span>' : ''}</div>
+              <div class="m">${m.unit||''} · low-stock alert at ${fmtNum(m.reorderLevel||0)}</div>
+              ${oldest ? `<span class="age-badge ${oldest.status}">${batchStatusLabel(oldest.status)}${oldest.ageDays!==null ? ' · '+oldest.ageDays+'d' : ''}</span>` : ''}
+            </div>
+            <div class="mat-row-actions">
+              <div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div>
+              <button class="btn btn-outline" data-toggle-status="${m.id}">${draft ? "Mark Active" : "Mark Draft"}</button>
+              <button class="btn btn-outline" data-edit="${m.id}">Edit</button>
+            </div>
+          </div>`;
+        }).join("");
       }).join("")}
     </div>
-  `).join("");
+  `;
+  }).join("");
   wrap.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openMaterialModal(btn.dataset.edit)));
   wrap.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", () => toggleMaterialStatus(btn.dataset.toggleStatus)));
 }
@@ -752,6 +926,7 @@ function openMaterialModal(materialId){
     const hasHistory = getRegistersForMaterial(materialId).length > 0;
     $("materialModalTitle").textContent = "Edit Material";
     $("matName").value = m.name || "";
+    $("matGroupName").value = m.groupName || "";
     $("matCategory").value = CATEGORIES.includes(m.category) ? m.category : "Other";
     $("matUnit").value = m.unit || "stems";
     $("matReorderLevel").value = m.reorderLevel ?? 10;
@@ -783,6 +958,7 @@ async function saveMaterial(){
   const name = $("matName").value.trim();
   if(!name){ showToast("Give the material a name first.", true); return; }
 
+  const groupName = $("matGroupName").value.trim();
   const category = $("matCategory").value;
   const unit = $("matUnit").value;
   const reorderLevel = Math.round(parseFloat($("matReorderLevel").value || 0));
@@ -794,12 +970,12 @@ async function saveMaterial(){
     if(editingMaterialId){
       const m = materials.find(x => x.id === editingMaterialId);
       if(!m){ showToast("That material no longer exists.", true); closeMaterialModal(); return; }
-      const updates = { name, category, unit, reorderLevel, status };
+      const updates = { name, groupName, category, unit, reorderLevel, status };
       if(initialStockVisible){ updates.initialStock = initialStock; }
       await updateDoc(doc(db, MATERIALS_COL, editingMaterialId), updates);
       showToast("Material updated.");
     }else{
-      await addDoc(collection(db, MATERIALS_COL), { name, category, unit, initialStock, reorderLevel, status });
+      await addDoc(collection(db, MATERIALS_COL), { name, groupName, category, unit, initialStock, reorderLevel, status });
       showToast("Material added.");
     }
     closeMaterialModal();
