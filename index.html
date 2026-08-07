@@ -96,11 +96,11 @@
 
   .mat-thumb{
     width:100%; height:110px; object-fit:cover; border-radius:3px; margin-bottom:10px;
-    background:var(--sage); display:block;
+    background:var(--sage); display:block; cursor:zoom-in;
   }
   .mat-thumb-sm{
     width:38px; height:38px; object-fit:cover; border-radius:50%; flex-shrink:0;
-    background:var(--sage); border:1px solid var(--line);
+    background:var(--sage); border:1px solid var(--line); cursor:zoom-in;
   }
   .mat-row-photo{ display:flex; align-items:center; gap:12px; }
   .color-swatch{
@@ -192,7 +192,13 @@
 
   .modal-overlay{ display:none; position:fixed; inset:0; background:rgba(43,42,38,0.45); align-items:center; justify-content:center; z-index:100; padding:20px; }
   .modal-overlay.active{ display:flex; }
-  .modal{ background:var(--white); border-radius:4px; padding:28px 30px; max-width:420px; width:100%; }
+  .modal{ background:var(--white); border-radius:4px; padding:22px 24px; max-width:380px; width:100%; max-height:88vh; overflow-y:auto; }
+  .modal h3{ font-size:1.25rem; margin-bottom:12px; }
+  .modal .form-grid.single{ gap:12px; }
+  .modal .field{ gap:4px; }
+  .modal label{ font-size:0.7rem; }
+  .modal input, .modal select{ padding:8px 10px; font-size:0.88rem; }
+  .modal .btn-row{ margin-top:14px; }
   .modal h3{ font-size:1.4rem; color:var(--forest-deep); margin-bottom:16px; }
 
   .toast{
@@ -402,6 +408,7 @@
         </div>
         <div class="field">
           <label>Photo URL (optional)</label>
+          <img id="matPhotoPreview" style="display:none; width:100%; height:120px; object-fit:cover; border-radius:3px; margin-bottom:6px; background:var(--sage);" />
           <input type="url" id="matPhotoUrl" placeholder="https://..." />
           <span style="font-size:0.72rem; color:var(--charcoal-soft);">Paste a link to a photo — e.g. from Google Drive (set to "Anyone with link"), Google Photos, or Imgur.</span>
         </div>
@@ -441,7 +448,12 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="lightboxOverlay" style="background:rgba(20,20,18,0.85); cursor:zoom-out;">
+  <img id="lightboxImg" style="max-width:90vw; max-height:85vh; border-radius:4px; object-fit:contain;" />
+</div>
+
 <div class="toast" id="toast"></div>
+
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -826,6 +838,19 @@ $("groupModalClose").addEventListener("click", () => {
   $("groupModalOverlay").classList.remove("active");
 });
 
+/* ---------- PHOTO LIGHTBOX ---------- */
+document.addEventListener("click", (e) => {
+  const img = e.target.closest(".mat-thumb, .mat-thumb-sm");
+  if(img && img.src){
+    e.stopPropagation();
+    $("lightboxImg").src = img.src;
+    $("lightboxOverlay").classList.add("active");
+  }
+});
+$("lightboxOverlay").addEventListener("click", () => {
+  $("lightboxOverlay").classList.remove("active");
+});
+
 /* ---------- BY COLOUR VIEW ---------- */
 function renderByColorView(){
   const activeMaterials = materials.filter(isActive);
@@ -1050,6 +1075,8 @@ function openMaterialModal(materialId){
   const initialStockField = $("matInitialStockField");
   const deleteBtn = $("materialDeleteBtn");
   $("materialForm").reset();
+  $("matPhotoUrl").value = "";
+  $("matPhotoPreview").style.display = "none";
 
   if(materialId){
     const m = materials.find(x => x.id === materialId);
@@ -1061,12 +1088,16 @@ function openMaterialModal(materialId){
     $("matCategory").value = CATEGORIES.includes(m.category) ? m.category : "Other";
     $("matUnit").value = m.unit || "stems";
     $("matColor").value = m.color || "";
-    $("matPhotoUrl").value = m.photoUrl || "";
     $("matReorderLevel").value = m.reorderLevel ?? 10;
     $("matInitialStock").value = m.initialStock ?? 0;
     $("matStatus").value = m.status || "active";
     initialStockField.style.display = hasHistory ? "none" : "flex";
     deleteBtn.style.display = "inline-block";
+    if(m.photoUrl){
+      $("matPhotoUrl").value = m.photoUrl;
+      $("matPhotoPreview").src = m.photoUrl;
+      $("matPhotoPreview").style.display = "block";
+    }
   }else{
     $("materialModalTitle").textContent = "Add Material";
     $("matInitialStock").value = 0;
@@ -1082,6 +1113,16 @@ function closeMaterialModal(){
   $("materialModalOverlay").classList.remove("active");
   editingMaterialId = null;
 }
+$("matPhotoUrl").addEventListener("input", () => {
+  const url = $("matPhotoUrl").value.trim();
+  const preview = $("matPhotoPreview");
+  if(url){
+    preview.src = url;
+    preview.style.display = "block";
+  }else{
+    preview.style.display = "none";
+  }
+});
 
 $("materialForm").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -1102,6 +1143,10 @@ async function saveMaterial(){
   const initialStock = Math.round(parseFloat($("matInitialStock").value || 0));
   const status = $("matStatus").value === "draft" ? "draft" : "active";
 
+  const saveBtn = $("materialSaveBtn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving…";
+
   try{
     if(editingMaterialId){
       const m = materials.find(x => x.id === editingMaterialId);
@@ -1118,6 +1163,9 @@ async function saveMaterial(){
   }catch(err){
     console.error("Failed to save material:", err);
     showToast("Something went wrong saving that — try again.", true);
+  }finally{
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Material";
   }
 }
 
