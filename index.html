@@ -167,6 +167,32 @@
   .btn-outline{ background:transparent; border:1px solid var(--line); color:var(--charcoal); }
   .btn-outline:hover{ border-color:var(--forest); color:var(--forest-deep); }
   .btn-danger-text{ background:none; border:none; color:var(--danger); font-size:0.78rem; cursor:pointer; text-decoration:underline; }
+
+  .status-switch{
+    position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; cursor:pointer;
+  }
+  .status-switch input{ opacity:0; width:0; height:0; position:absolute; }
+  .status-switch .track{
+    position:absolute; inset:0; background:var(--charcoal-soft); border-radius:14px; transition:background 0.2s ease;
+  }
+  .status-switch .track::before{
+    content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:var(--white);
+    border-radius:50%; transition:transform 0.2s ease;
+  }
+  .status-switch input:checked + .track{ background:var(--forest); }
+  .status-switch input:checked + .track::before{ transform:translateX(18px); }
+  .status-switch-wrap{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .status-switch-label{ font-size:0.62rem; letter-spacing:0.4px; text-transform:uppercase; color:var(--charcoal-soft); }
+
+  .search-bar{
+    position:relative; flex:1; min-width:180px; max-width:320px;
+  }
+  .search-bar input{
+    width:100%; padding:9px 12px 9px 34px; font-size:0.85rem;
+  }
+  .search-bar svg{
+    position:absolute; left:11px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--charcoal-soft); pointer-events:none;
+  }
   .btn-row{ display:flex; gap:10px; margin-top:20px; align-items:center; flex-wrap:wrap; }
 
   .mat-row{ display:flex; align-items:center; justify-content:space-between; padding:14px 4px; border-bottom:1px solid var(--line); gap:12px; flex-wrap:wrap; }
@@ -268,6 +294,10 @@
       <div class="stat-card"><div class="num" id="statUsageToday">0</div><div class="label">Used today</div></div>
       <div class="stat-card"><div class="num" id="statWastageToday">0</div><div class="label">Wasted today</div></div>
     </div>
+    <div class="search-bar" style="max-width:100%; margin-bottom:20px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="dashboardSearch" placeholder="Search flower or group…" />
+    </div>
     <div id="dashboardByCategory"></div>
   </section>
 
@@ -319,10 +349,16 @@
       <div class="view-title">Materials</div>
       <button class="btn btn-primary" id="addMaterialBtn">+ Add Material</button>
     </div>
-    <div class="entry-type-toggle" id="materialsStatusToggle" style="margin-bottom:16px;">
-      <button class="type-pill active" data-status-filter="active">Active</button>
-      <button class="type-pill" data-status-filter="draft">Draft</button>
-      <button class="type-pill" data-status-filter="all">All</button>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+      <div class="entry-type-toggle" id="materialsStatusToggle" style="margin-bottom:0;">
+        <button class="type-pill active" data-status-filter="active">Active</button>
+        <button class="type-pill" data-status-filter="draft">Draft</button>
+        <button class="type-pill" data-status-filter="all">All</button>
+      </div>
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="materialsSearch" placeholder="Search flower or group…" />
+      </div>
     </div>
     <div class="card"><div id="materialsByCategory"></div></div>
   </section>
@@ -742,6 +778,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 });
 
 /* ---------- DASHBOARD ---------- */
+$("dashboardSearch").addEventListener("input", renderDashboard);
 function renderDashboard(){
   const activeMaterials = materials.filter(isActive);
   const draftCount = materials.length - activeMaterials.length;
@@ -763,7 +800,15 @@ function renderDashboard(){
     wrap.innerHTML = `<div class="empty-state">No active materials yet. Add one, or mark a draft material active, under the Materials tab.</div>`;
     return;
   }
-  const groups = materialsByCategory(activeMaterials);
+  const searchTerm = ($("dashboardSearch").value || "").trim().toLowerCase();
+  const searched = searchTerm
+    ? activeMaterials.filter(m => `${m.name} ${m.groupName||''}`.toLowerCase().includes(searchTerm))
+    : activeMaterials;
+  if(searched.length === 0){
+    wrap.innerHTML = `<div class="empty-state">No flowers match "${$("dashboardSearch").value}".</div>`;
+    return;
+  }
+  const groups = materialsByCategory(searched);
   wrap.innerHTML = CATEGORIES.filter(c => groups[c].length > 0).map(cat => {
     const variantGroups = materialsByGroup(groups[cat]);
     const groupKeys = Object.keys(variantGroups).sort((a,b) => a.localeCompare(b));
@@ -1006,6 +1051,7 @@ $("saveRegisterBtn").addEventListener("click", async () => {
 
 /* ---------- MATERIALS CRUD ---------- */
 let materialsStatusFilter = "active";
+let materialsSearchTerm = "";
 
 document.querySelectorAll("#materialsStatusToggle .type-pill").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -1015,17 +1061,27 @@ document.querySelectorAll("#materialsStatusToggle .type-pill").forEach(btn => {
     renderMaterialsList();
   });
 });
+$("materialsSearch").addEventListener("input", () => {
+  materialsSearchTerm = $("materialsSearch").value.trim().toLowerCase();
+  renderMaterialsList();
+});
 
 function renderMaterialsList(){
   const wrap = $("materialsByCategory");
   const filtered = materials.filter(m => {
-    if(materialsStatusFilter === "all") return true;
-    return (m.status || "active") === materialsStatusFilter;
+    if(materialsStatusFilter !== "all" && (m.status || "active") !== materialsStatusFilter) return false;
+    if(materialsSearchTerm){
+      const haystack = `${m.name} ${m.groupName||''}`.toLowerCase();
+      if(!haystack.includes(materialsSearchTerm)) return false;
+    }
+    return true;
   });
   if(filtered.length === 0){
-    wrap.innerHTML = materials.length === 0
-      ? `<div class="empty-state">No materials yet. Click "Add Material" to start tracking flowers and stems.</div>`
-      : `<div class="empty-state">No ${materialsStatusFilter} materials.</div>`;
+    wrap.innerHTML = materialsSearchTerm
+      ? `<div class="empty-state">No materials match "${$("materialsSearch").value}".</div>`
+      : materials.length === 0
+        ? `<div class="empty-state">No materials yet. Click "Add Material" to start tracking flowers and stems.</div>`
+        : `<div class="empty-state">No ${materialsStatusFilter} materials.</div>`;
     return;
   }
   const groups = materialsByCategory(filtered);
@@ -1054,7 +1110,13 @@ function renderMaterialsList(){
             </div>
             <div class="mat-row-actions">
               <div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div>
-              <button class="btn btn-outline" data-toggle-status="${m.id}">${draft ? "Mark Active" : "Mark Draft"}</button>
+              <div class="status-switch-wrap">
+                <label class="status-switch">
+                  <input type="checkbox" data-toggle-status="${m.id}" ${!draft ? "checked" : ""} />
+                  <span class="track"></span>
+                </label>
+                <span class="status-switch-label">${draft ? "Draft" : "Active"}</span>
+              </div>
               <button class="btn btn-outline" data-edit="${m.id}">Edit</button>
             </div>
           </div>`;
@@ -1064,7 +1126,7 @@ function renderMaterialsList(){
   `;
   }).join("");
   wrap.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openMaterialModal(btn.dataset.edit)));
-  wrap.querySelectorAll("[data-toggle-status]").forEach(btn => btn.addEventListener("click", () => toggleMaterialStatus(btn.dataset.toggleStatus)));
+  wrap.querySelectorAll("[data-toggle-status]").forEach(input => input.addEventListener("change", () => toggleMaterialStatus(input.dataset.toggleStatus)));
 }
 
 async function toggleMaterialStatus(materialId){
