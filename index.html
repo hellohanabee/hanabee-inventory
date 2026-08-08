@@ -393,18 +393,9 @@
         </div>
         <div class="field">
           <label>Colour</label>
-          <select id="matColor">
-            <option value="">— Not set —</option>
-            <option value="Red">Red</option>
-            <option value="Pink">Pink</option>
-            <option value="White">White</option>
-            <option value="Yellow">Yellow</option>
-            <option value="Orange">Orange</option>
-            <option value="Purple">Purple</option>
-            <option value="Green">Green</option>
-            <option value="Mixed">Mixed</option>
-            <option value="Other">Other</option>
-          </select>
+          <input type="text" id="matColor" list="colorOptions" placeholder="e.g. Peach, Cream, or pick a suggestion" autocomplete="off" />
+          <datalist id="colorOptions"></datalist>
+          <span style="font-size:0.72rem; color:var(--charcoal-soft);">Type any colour you like — reuse the same spelling for flowers that should group together (e.g. always "Peach", not "peach" or "Peach ").</span>
         </div>
         <div class="field">
           <label>Photo (optional)</label>
@@ -701,21 +692,41 @@ function batchStatusLabel(status){
   return { fresh:"Fresh", aging:"Push Soon", expired:"Push First", unknown:"Age Unknown" }[status] || "";
 }
 
-const COLORS = ["Red", "Pink", "White", "Yellow", "Orange", "Purple", "Green", "Mixed", "Other"];
+const COLOR_PRESETS = ["Red", "Pink", "White", "Yellow", "Orange", "Purple", "Green", "Mixed"];
 function colorToHex(color){
-  return {
+  const known = {
     Red:"#B4483B", Pink:"#C98B95", White:"#F1ECE2", Yellow:"#D9B44A",
-    Orange:"#C97A3D", Purple:"#8B6FA8", Green:"#5B7A5E", Mixed:"conic-gradient(#B4483B,#D9B44A,#5B7A5E,#8B6FA8,#B4483B)", Other:"#6B6558"
-  }[color] || "#6B6558";
+    Orange:"#C97A3D", Purple:"#8B6FA8", Green:"#5B7A5E",
+    Mixed:"conic-gradient(#B4483B,#D9B44A,#5B7A5E,#8B6FA8,#B4483B)", Other:"#6B6558"
+  };
+  if(known[color]) return known[color];
+  if(!color) return "#6B6558";
+  // Custom colour name: derive a stable pastel-ish hue from the text itself,
+  // so different custom colours get visibly different (but consistent) swatches.
+  let hash = 0;
+  for(let i = 0; i < color.length; i++){ hash = color.charCodeAt(i) + ((hash << 5) - hash); }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 45%, 55%)`;
 }
 function materialsByColor(list){
   const groups = {};
   (list || materials).forEach(m => {
-    const key = m.color && m.color.trim() ? m.color : "Not set";
+    const key = m.color && m.color.trim() ? m.color.trim() : "Not set";
     if(!groups[key]) groups[key] = [];
     groups[key].push(m);
   });
   return groups;
+}
+// All distinct colour names currently in use across materials, for autocomplete.
+function allColorsInUse(){
+  const used = new Set();
+  materials.forEach(m => { if(m.color && m.color.trim()) used.add(m.color.trim()); });
+  return Array.from(used).sort((a,b) => a.localeCompare(b));
+}
+function renderColorOptions(){
+  const datalist = $("colorOptions");
+  const combined = Array.from(new Set([...COLOR_PRESETS, ...allColorsInUse()])).sort((a,b) => a.localeCompare(b));
+  datalist.innerHTML = combined.map(c => `<option value="${c}"></option>`).join("");
 }
 
 /* ---------- NAV ---------- */
@@ -836,7 +847,7 @@ function openGroupModal(category, groupKey){
   renderVariantsModal(groupKey, variants);
 }
 function openColorModal(colorKey){
-  const variants = materials.filter(m => isActive(m) && (m.color && m.color.trim() ? m.color : "Not set") === colorKey);
+  const variants = materials.filter(m => isActive(m) && (m.color && m.color.trim() ? m.color.trim() : "Not set") === colorKey);
   renderVariantsModal(`${colorKey} — all variants`, variants);
 }
 $("groupModalClose").addEventListener("click", () => {
@@ -865,7 +876,9 @@ function renderByColorView(){
     return;
   }
   const groups = materialsByColor(activeMaterials);
-  const colorKeys = COLORS.filter(c => groups[c] && groups[c].length > 0);
+  const colorKeys = Object.keys(groups)
+    .filter(k => k !== "Not set" && groups[k].length > 0)
+    .sort((a,b) => a.localeCompare(b));
   if(groups["Not set"] && groups["Not set"].length > 0) colorKeys.push("Not set");
 
   if(colorKeys.length === 0){
@@ -873,28 +886,23 @@ function renderByColorView(){
     return;
   }
 
-  wrap.innerHTML = colorKeys.map(colorKey => {
+  wrap.innerHTML = `<div class="material-grid">${colorKeys.map(colorKey => {
     const items = groups[colorKey];
     const totalStock = items.reduce((s,m) => s + currentStockOf(m.id), 0);
     const isLow = items.some(m => currentStockOf(m.id) <= Number(m.reorderLevel||0));
     const photo = items.find(m => m.photoUrl)?.photoUrl;
     return `
-      <div class="category-block">
-        <p class="category-heading"><span class="color-swatch" style="width:12px; height:12px; background:${colorToHex(colorKey)};"></span>${colorKey} <span class="count">${items.length}</span></p>
-        <div class="material-grid">
-          <div class="material-card ${isLow ? 'low' : ''}" data-color-card="${colorKey}">
-            ${isLow ? '<span class="low-badge">Low</span>' : ''}
-            ${photo ? `<img class="mat-thumb" src="${photo}" alt="${colorKey}" onerror="this.style.display='none';" />` : ''}
-            <div class="cat">${items.length} item${items.length>1?'s':''}</div>
-            <div class="name">${colorKey}</div>
-            <div class="stem-gauge">
-              <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, totalStock)}%"></div></div>
-              <div class="qty">${fmtNum(totalStock)} total</div>
-            </div>
-          </div>
+      <div class="material-card ${isLow ? 'low' : ''}" data-color-card="${colorKey}">
+        ${isLow ? '<span class="low-badge">Low</span>' : ''}
+        ${photo ? `<img class="mat-thumb" src="${photo}" alt="${colorKey}" onerror="this.style.display='none';" />` : ''}
+        <div class="cat">${items.length} item${items.length>1?'s':''}</div>
+        <div class="name"><span class="color-swatch" style="width:11px; height:11px; background:${colorToHex(colorKey)};"></span>${colorKey}</div>
+        <div class="stem-gauge">
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, totalStock)}%"></div></div>
+          <div class="qty">${fmtNum(totalStock)} total</div>
         </div>
       </div>`;
-  }).join("");
+  }).join("")}</div>`;
 
   wrap.querySelectorAll("[data-color-card]").forEach(card => {
     card.addEventListener("click", () => openColorModal(card.dataset.colorCard));
@@ -1086,6 +1094,7 @@ function openMaterialModal(materialId){
   $("matPhotoPreview").style.display = "none";
   $("matPhotoStatus").textContent = "Tap to take or choose a photo of the flower.";
   existingPhotoUrl = "";
+  renderColorOptions();
 
   if(materialId){
     const m = materials.find(x => x.id === materialId);
@@ -1144,7 +1153,7 @@ async function saveMaterial(){
   const groupName = $("matGroupName").value.trim();
   const category = $("matCategory").value;
   const unit = $("matUnit").value;
-  const color = $("matColor").value;
+  const color = $("matColor").value.trim();
   const reorderLevel = Math.round(parseFloat($("matReorderLevel").value || 0));
   const initialStockVisible = $("matInitialStockField").style.display !== "none";
   const initialStock = Math.round(parseFloat($("matInitialStock").value || 0));
