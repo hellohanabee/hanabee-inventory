@@ -407,10 +407,10 @@
           </select>
         </div>
         <div class="field">
-          <label>Photo URL (optional)</label>
+          <label>Photo (optional)</label>
           <img id="matPhotoPreview" style="display:none; width:100%; height:120px; object-fit:cover; border-radius:3px; margin-bottom:6px; background:var(--sage);" />
-          <input type="url" id="matPhotoUrl" placeholder="https://..." />
-          <span style="font-size:0.72rem; color:var(--charcoal-soft);">Paste a link to a photo — e.g. from Google Drive (set to "Anyone with link"), Google Photos, or Imgur.</span>
+          <input type="file" id="matPhotoFile" accept="image/*" />
+          <span id="matPhotoStatus" style="font-size:0.72rem; color:var(--charcoal-soft);">Tap to take or choose a photo of the flower.</span>
         </div>
         <div class="field" id="matInitialStockField">
           <label>Opening stock (as of first day tracked)</label>
@@ -464,6 +464,9 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
   onSnapshot, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 /* ============================================================
    FIREBASE CONFIG — hanabee-inventory project
@@ -479,12 +482,14 @@ const firebaseConfig = {
 
 // Authorised Google accounts — add every email that should be able to sign in.
 const AUTHORISED_EMAILS = [
-  "hello.hanabee@gmail.com"
+  "hello.hanabee@gmail.com",
+  "hello@hanabee.in"
 ];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 const provider = new GoogleAuthProvider();
 
 const MATERIALS_COL = "hb_materials";
@@ -1070,13 +1075,17 @@ async function toggleMaterialStatus(materialId){
 $("addMaterialBtn").addEventListener("click", () => openMaterialModal(null));
 $("materialModalCancel").addEventListener("click", closeMaterialModal);
 
+let existingPhotoUrl = ""; // kept when editing, unless a new file is chosen
+
 function openMaterialModal(materialId){
   editingMaterialId = materialId || null;
   const initialStockField = $("matInitialStockField");
   const deleteBtn = $("materialDeleteBtn");
   $("materialForm").reset();
-  $("matPhotoUrl").value = "";
+  $("matPhotoFile").value = "";
   $("matPhotoPreview").style.display = "none";
+  $("matPhotoStatus").textContent = "Tap to take or choose a photo of the flower.";
+  existingPhotoUrl = "";
 
   if(materialId){
     const m = materials.find(x => x.id === materialId);
@@ -1094,9 +1103,10 @@ function openMaterialModal(materialId){
     initialStockField.style.display = hasHistory ? "none" : "flex";
     deleteBtn.style.display = "inline-block";
     if(m.photoUrl){
-      $("matPhotoUrl").value = m.photoUrl;
+      existingPhotoUrl = m.photoUrl;
       $("matPhotoPreview").src = m.photoUrl;
       $("matPhotoPreview").style.display = "block";
+      $("matPhotoStatus").textContent = "Current photo shown above — choose a file to replace it.";
     }
   }else{
     $("materialModalTitle").textContent = "Add Material";
@@ -1113,15 +1123,13 @@ function closeMaterialModal(){
   $("materialModalOverlay").classList.remove("active");
   editingMaterialId = null;
 }
-$("matPhotoUrl").addEventListener("input", () => {
-  const url = $("matPhotoUrl").value.trim();
+$("matPhotoFile").addEventListener("change", () => {
+  const file = $("matPhotoFile").files[0];
+  if(!file) return;
   const preview = $("matPhotoPreview");
-  if(url){
-    preview.src = url;
-    preview.style.display = "block";
-  }else{
-    preview.style.display = "none";
-  }
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+  $("matPhotoStatus").textContent = `${file.name} — will upload when you save.`;
 });
 
 $("materialForm").addEventListener("submit", (e) => {
@@ -1137,17 +1145,25 @@ async function saveMaterial(){
   const category = $("matCategory").value;
   const unit = $("matUnit").value;
   const color = $("matColor").value;
-  const photoUrl = $("matPhotoUrl").value.trim();
   const reorderLevel = Math.round(parseFloat($("matReorderLevel").value || 0));
   const initialStockVisible = $("matInitialStockField").style.display !== "none";
   const initialStock = Math.round(parseFloat($("matInitialStock").value || 0));
   const status = $("matStatus").value === "draft" ? "draft" : "active";
+  const photoFile = $("matPhotoFile").files[0];
 
   const saveBtn = $("materialSaveBtn");
   saveBtn.disabled = true;
-  saveBtn.textContent = "Saving…";
+  saveBtn.textContent = photoFile ? "Uploading photo…" : "Saving…";
 
   try{
+    let photoUrl = existingPhotoUrl;
+    if(photoFile){
+      const path = `material-photos/${Date.now()}_${photoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, photoFile);
+      photoUrl = await getDownloadURL(fileRef);
+    }
+
     if(editingMaterialId){
       const m = materials.find(x => x.id === editingMaterialId);
       if(!m){ showToast("That material no longer exists.", true); closeMaterialModal(); return; }
