@@ -290,7 +290,7 @@
     <div class="stat-grid">
       <div class="stat-card"><div class="num" id="statMaterials">0</div><div class="label">Active materials</div></div>
       <div class="stat-card"><div class="num" id="statDraft">0</div><div class="label">Draft materials</div></div>
-      <div class="stat-card warn"><div class="num" id="statLowStock">0</div><div class="label">Low stock</div></div>
+      <div class="stat-card warn" id="lowStockCard" style="cursor:pointer;"><div class="num" id="statLowStock">0</div><div class="label">Low stock</div></div>
       <div class="stat-card"><div class="num" id="statUsageToday">0</div><div class="label">Used today</div></div>
       <div class="stat-card"><div class="num" id="statWastageToday">0</div><div class="label">Wasted today</div></div>
     </div>
@@ -546,11 +546,20 @@ let historyViewMode = "detailed";
 let registerSortDir = "asc";
 
 const $ = (id) => document.getElementById(id);
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+// Build YYYY-MM-DD from LOCAL date parts — never use toISOString() for this,
+// since it converts through UTC and silently shifts the date in timezones
+// ahead of UTC (like IST), which was causing the register date nav to skip.
+function toLocalISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayISO(){ return toLocalISO(new Date()); }
 function addDays(iso, n){
   const d = new Date(iso + "T00:00:00");
   d.setDate(d.getDate()+n);
-  return d.toISOString().slice(0,10);
+  return toLocalISO(d);
 }
 function showToast(msg, isError=false){
   const t = $("toast");
@@ -862,14 +871,15 @@ function renderVariantsModal(title, variants){
   $("groupModalTitle").textContent = title;
   $("groupModalBody").innerHTML = variants.map(m => {
     const stock = currentStockOf(m.id);
+    const isLow = stock <= Number(m.reorderLevel||0);
     const batchesOldestFirst = getBatchesForMaterial(m.id);
     const swatch = m.color ? `<span class="color-swatch" style="background:${colorToHex(m.color)};" title="${m.color}"></span>` : '';
     return `
-      <div class="variant-modal-row" style="flex-direction:column; align-items:stretch;">
+      <div class="variant-modal-row" style="flex-direction:column; align-items:stretch; ${isLow ? 'background:#FBF2F3; margin:0 -8px; padding:12px 8px; border-radius:3px;' : ''}">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           ${m.photoUrl ? `<img class="mat-thumb-sm" src="${m.photoUrl}" alt="${m.name}" onerror="this.style.display='none';" />` : ''}
-          <div class="vn" style="flex:1;">${swatch}${m.name}</div>
-          <div class="vs">${fmtNum(stock)} ${m.unit||''}</div>
+          <div class="vn" style="flex:1;">${swatch}${m.name} ${isLow ? '<span class="low-badge" style="position:static; display:inline-block;">Low</span>' : ''}</div>
+          <div class="vs" style="${isLow ? 'color:var(--rose-deep);' : ''}">${fmtNum(stock)} ${m.unit||''}</div>
         </div>
         <div class="batch-list">
           ${batchesOldestFirst.length === 0
@@ -896,8 +906,18 @@ function openColorModal(colorKey){
   const variants = materials.filter(m => isActive(m) && (m.color && m.color.trim() ? m.color.trim() : "Not set") === colorKey);
   renderVariantsModal(`${colorKey} — all variants`, variants);
 }
+function openLowStockModal(){
+  const low = materials.filter(m => isActive(m) && currentStockOf(m.id) <= Number(m.reorderLevel||0))
+    .sort((a,b) => a.name.localeCompare(b.name));
+  if(low.length === 0){ showToast("Nothing is low on stock right now."); return; }
+  renderVariantsModal(`Low Stock (${low.length})`, low);
+}
+$("lowStockCard").addEventListener("click", openLowStockModal);
 $("groupModalClose").addEventListener("click", () => {
   $("groupModalOverlay").classList.remove("active");
+});
+$("groupModalOverlay").addEventListener("click", (e) => {
+  if(e.target === e.currentTarget) $("groupModalOverlay").classList.remove("active");
 });
 
 /* ---------- PHOTO LIGHTBOX ---------- */
@@ -1195,6 +1215,9 @@ function closeMaterialModal(){
   $("materialModalOverlay").classList.remove("active");
   editingMaterialId = null;
 }
+$("materialModalOverlay").addEventListener("click", (e) => {
+  if(e.target === e.currentTarget) closeMaterialModal();
+});
 $("matPhotoFile").addEventListener("change", () => {
   const file = $("matPhotoFile").files[0];
   if(!file) return;
