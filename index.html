@@ -1048,6 +1048,26 @@ function renderRegisterTable(){
       });
     });
   });
+
+  // Enter moves to the same field in the next row, spreadsheet-style,
+  // instead of doing nothing (there's no form to submit here).
+  const dataRows = Array.from(tbody.querySelectorAll("tr[data-material]"));
+  dataRows.forEach((row, rowIndex) => {
+    row.querySelectorAll(".reg-input").forEach(input => {
+      input.addEventListener("keydown", (e) => {
+        if(e.key !== "Enter") return;
+        e.preventDefault();
+        const field = input.dataset.field;
+        const nextRow = dataRows[rowIndex + 1];
+        if(nextRow){
+          const nextInput = nextRow.querySelector(`[data-field="${field}"]`);
+          if(nextInput){ nextInput.focus(); nextInput.select(); }
+        }else{
+          input.blur();
+        }
+      });
+    });
+  });
 }
 
 $("saveRegisterBtn").addEventListener("click", async () => {
