@@ -1014,7 +1014,7 @@ function renderRegisterTable(){
       const opening = openingForDate(m.id, date);
       const purchase = existing ? existing.purchase : 0;
       const wastage = existing ? existing.wastage : 0;
-      const closing = existing ? existing.closing : opening;
+      const closing = existing ? existing.closing : 0;
       const usage = opening + Number(purchase) - Number(wastage) - Number(closing);
       html += `
         <tr data-material="${m.id}">
@@ -1049,23 +1049,27 @@ function renderRegisterTable(){
     });
   });
 
-  // Enter moves to the same field in the next row (spreadsheet-style);
-  // Left/Right arrows move between columns in the same row.
+  // Enter/ArrowDown move to the same field in the next row, ArrowUp to the
+  // previous row (spreadsheet-style); Left/Right arrows move between
+  // columns in the same row.
   const FIELD_ORDER = ["purchase", "wastage", "closing"];
   const dataRows = Array.from(tbody.querySelectorAll("tr[data-material]"));
+  const focusRow = (targetRow, field) => {
+    if(!targetRow) return false;
+    const targetInput = targetRow.querySelector(`[data-field="${field}"]`);
+    if(targetInput){ targetInput.focus(); targetInput.select(); return true; }
+    return false;
+  };
   dataRows.forEach((row, rowIndex) => {
     row.querySelectorAll(".reg-input").forEach(input => {
       input.addEventListener("keydown", (e) => {
         const field = input.dataset.field;
-        if(e.key === "Enter"){
+        if(e.key === "Enter" || e.key === "ArrowDown"){
           e.preventDefault();
-          const nextRow = dataRows[rowIndex + 1];
-          if(nextRow){
-            const nextInput = nextRow.querySelector(`[data-field="${field}"]`);
-            if(nextInput){ nextInput.focus(); nextInput.select(); }
-          }else{
-            input.blur();
-          }
+          if(!focusRow(dataRows[rowIndex + 1], field) && e.key === "Enter"){ input.blur(); }
+        }else if(e.key === "ArrowUp"){
+          e.preventDefault();
+          focusRow(dataRows[rowIndex - 1], field);
         }else if(e.key === "ArrowRight" || e.key === "ArrowLeft"){
           const idx = FIELD_ORDER.indexOf(field);
           const targetIdx = e.key === "ArrowRight" ? idx + 1 : idx - 1;
@@ -1079,24 +1083,39 @@ function renderRegisterTable(){
   });
 }
 
-$("saveRegisterBtn").addEventListener("click", async () => {
+$("saveRegisterBtn").addEventListener("click", () => {
   const date = $("registerDate").value || todayISO();
   const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
-  try{
-    await Promise.all(rows.map(row => {
-      const materialId = row.dataset.material;
-      const purchase = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
-      const wastage = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
-      const closing = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
-      const regId = `${materialId}_${date}`;
-      return setDoc(doc(db, REGISTERS_COL, regId), { materialId, date, purchase, wastage, closing }, { merge: true });
-    }));
-    showToast(`Saved register for ${fmtDate(date)}.`);
-    // onSnapshot will refresh local state and re-render automatically.
-  }catch(err){
-    console.error("Failed to save register:", err);
-    showToast("Couldn't save today's register. Try again.", true);
-  }
+  const entries = rows.map(row => ({
+    materialId: row.dataset.material,
+    purchase: Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0)),
+    wastage: Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0)),
+    closing: Math.round(Number(row.querySelector('[data-field="closing"]').value || 0))
+  }));
+
+  // Optimistic update: apply instantly to local state and re-render right away,
+  // instead of waiting on the round-trip to Firestore — the write happens
+  // in the background and the real-time listener will reconcile silently.
+  entries.forEach(({ materialId, purchase, wastage, closing }) => {
+    let reg = getRegister(materialId, date);
+    if(reg){
+      reg.purchase = purchase; reg.wastage = wastage; reg.closing = closing;
+    }else{
+      reg = { id: `local_${materialId}_${date}`, materialId, date, purchase, wastage, closing };
+      registers.push(reg);
+    }
+  });
+  recalcAll();
+  renderAll();
+  showToast(`Saved register for ${fmtDate(date)}.`);
+
+  Promise.all(entries.map(({ materialId, purchase, wastage, closing }) => {
+    const regId = `${materialId}_${date}`;
+    return setDoc(doc(db, REGISTERS_COL, regId), { materialId, date, purchase, wastage, closing }, { merge: true });
+  })).catch(err => {
+    console.error("Failed to sync register:", err);
+    showToast("Saved on screen, but syncing failed — check your connection and try Save Day again.", true);
+  });
 });
 
 /* ---------- MATERIALS CRUD ---------- */
