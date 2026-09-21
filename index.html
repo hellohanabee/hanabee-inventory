@@ -149,6 +149,14 @@
   }
   table.register .usage-val.negative{ color:var(--danger); }
   .locked-note{ font-size:0.72rem; color:var(--charcoal-soft); font-style:italic; }
+  table.register tr.entered td:first-child{ border-left:3px solid var(--forest); }
+  table.register .entered-check{
+    display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+    border-radius:50%; background:var(--forest); color:var(--white); font-size:0.6rem; margin-right:6px; flex-shrink:0;
+  }
+  table.register tr.hidden-by-search{ display:none; }
+  table.register input.reg-input.odd-warning{ border-color:var(--danger); background:#FBF0EE; }
+  .odd-warning-note{ font-size:0.68rem; color:var(--danger); margin-top:2px; }
 
   .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .form-grid.single{ grid-template-columns:1fr; }
@@ -211,6 +219,15 @@
   .filter-bar{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
   .filter-bar select, .filter-bar input{ min-width:140px; }
   table.history{ width:100%; border-collapse:collapse; }
+
+  .chart-wrap{ display:flex; align-items:flex-end; gap:18px; min-width:100%; padding-bottom:4px; }
+  .chart-bucket{ display:flex; flex-direction:column; align-items:center; gap:6px; min-width:52px; }
+  .chart-bars{ display:flex; align-items:flex-end; gap:3px; height:140px; }
+  .chart-bar{ width:11px; border-radius:2px 2px 0 0; transition:height 0.3s ease; position:relative; }
+  .chart-bar.purchase{ background:var(--forest); }
+  .chart-bar.usage{ background:var(--gold); }
+  .chart-bar.wastage{ background:var(--rose-deep); }
+  .chart-bucket-label{ font-size:0.68rem; color:var(--charcoal-soft); white-space:nowrap; text-align:center; }
   table.history th{ text-align:left; font-size:0.7rem; letter-spacing:0.8px; text-transform:uppercase; color:var(--charcoal-soft); padding:10px 10px; border-bottom:1px solid var(--line); }
   table.history th.num, table.history td.num{ text-align:right; }
   table.history td{ padding:10px; font-size:0.85rem; border-bottom:1px solid var(--cream-deep); }
@@ -320,7 +337,19 @@
         <button class="btn btn-outline" id="regSortBtn" style="margin-left:6px;">Sort: A–Z</button>
       </div>
     </div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="registerSearch" placeholder="Search flower or group…" />
+      </div>
+      <button class="btn btn-outline" id="copyYesterdayBtn">Copy yesterday's purchases</button>
+      <span id="registerProgress" style="font-size:0.78rem; color:var(--charcoal-soft);"></span>
+    </div>
     <div class="card">
+      <div class="field" style="margin-bottom:16px; max-width:480px;">
+        <label>Note for this day (optional)</label>
+        <input type="text" id="registerNote" placeholder="e.g. Extra roses used for a wedding order" />
+      </div>
       <div class="register-table-wrap">
         <table class="register" id="registerTable">
           <thead>
@@ -366,18 +395,43 @@
   <!-- ---------- HISTORY ---------- -->
   <section class="view" id="view-history">
     <div class="view-header"><div class="view-title">Ledger History</div></div>
+
     <div class="filter-bar">
-      <div class="entry-type-toggle" id="historyViewToggle">
-        <button class="type-pill active" data-view-mode="detailed">Detailed</button>
-        <button class="type-pill" data-view-mode="byday">By Day</button>
-      </div>
       <select id="filterCategory"><option value="">All categories</option></select>
       <select id="filterMaterial"><option value="">All materials</option></select>
       <input type="date" id="filterFrom" />
       <input type="date" id="filterTo" />
       <button class="btn btn-outline" id="clearFiltersBtn">Clear</button>
     </div>
+
+    <div class="card" style="margin-bottom:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+        <p class="section-label" style="margin:0;">Trend — Purchase / Usage / Wastage</p>
+        <div class="entry-type-toggle" id="analyticsGranularityToggle">
+          <button class="type-pill" data-granularity="daily">Daily</button>
+          <button class="type-pill active" data-granularity="weekly">Weekly</button>
+          <button class="type-pill" data-granularity="monthly">Monthly</button>
+        </div>
+      </div>
+      <div class="stat-grid" id="analyticsStats" style="margin-bottom:20px;"></div>
+      <div style="overflow-x:auto;">
+        <div id="analyticsChart"></div>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:10px; font-size:0.75rem; color:var(--charcoal-soft);">
+        <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--forest); margin-right:5px;"></span>Purchase</span>
+        <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--gold); margin-right:5px;"></span>Usage</span>
+        <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--rose-deep); margin-right:5px;"></span>Wastage</span>
+      </div>
+    </div>
+
     <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+        <div class="entry-type-toggle" id="historyViewToggle" style="margin-bottom:0;">
+          <button class="type-pill active" data-view-mode="detailed">Detailed</button>
+          <button class="type-pill" data-view-mode="byday">By Day</button>
+        </div>
+        <button class="btn btn-outline" id="exportCsvBtn">⬇ Export CSV</button>
+      </div>
       <div style="overflow-x:auto;">
         <table class="history">
           <thead>
@@ -522,7 +576,9 @@ const provider = new GoogleAuthProvider();
 
 const MATERIALS_COL = "hb_materials";
 const REGISTERS_COL = "hb_registers";
+const DAY_NOTES_COL = "hb_day_notes";
 let currentUser = null;
+let dayNotes = {}; // { [date]: note string }
 
 /* ============================================================
    Ledger model per material, per day:
@@ -543,6 +599,7 @@ let registers = [];
 
 let editingMaterialId = null;
 let historyViewMode = "detailed";
+let lastHistoryRows = [];
 let registerSortDir = "asc";
 
 const $ = (id) => document.getElementById(id);
@@ -619,6 +676,12 @@ function startListeners(){
     recalcAll();
     renderAll();
   }, (err) => { console.error(err); showToast("Couldn't load ledger history.", true); });
+
+  onSnapshot(collection(db, DAY_NOTES_COL), (snap) => {
+    dayNotes = {};
+    snap.docs.forEach(d => { dayNotes[d.id] = d.data().note || ""; });
+    if($("view-register").classList.contains("active")) renderRegisterTable();
+  }, (err) => { console.error(err); });
 }
 
 /* ---------- ledger engine ---------- */
@@ -991,18 +1054,57 @@ $("regSortBtn").addEventListener("click", () => {
   renderRegisterTable();
 });
 
+/* ---------- LOCAL DRAFT SAFETY NET ----------
+   If the tab closes, refreshes, or the person navigates away before hitting
+   "Save Day", nothing typed should be lost. Every keystroke is mirrored to
+   localStorage; it's read back in whenever that date is opened, and cleared
+   once Save Day actually succeeds. */
+const DRAFT_KEY = "hanabee_register_draft_v1";
+function loadDraftStore(){
+  try{ return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}"); }catch(e){ return {}; }
+}
+function saveDraftStore(store){
+  try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(store)); }catch(e){ /* storage unavailable — not critical */ }
+}
+function getDraftForDate(date){
+  return loadDraftStore()[date] || null;
+}
+function updateDraftEntry(date, materialId, field, value){
+  const store = loadDraftStore();
+  if(!store[date]) store[date] = { note:"", entries:{} };
+  if(!store[date].entries[materialId]) store[date].entries[materialId] = {};
+  store[date].entries[materialId][field] = value;
+  saveDraftStore(store);
+}
+function updateDraftNote(date, note){
+  const store = loadDraftStore();
+  if(!store[date]) store[date] = { note:"", entries:{} };
+  store[date].note = note;
+  saveDraftStore(store);
+}
+function clearDraftForDate(date){
+  const store = loadDraftStore();
+  delete store[date];
+  saveDraftStore(store);
+}
+
 function renderRegisterTable(){
   const date = $("registerDate").value || todayISO();
   const tbody = $("registerTableBody");
   const activeMaterials = materials.filter(isActive);
 
+  const draft = getDraftForDate(date);
+  $("registerNote").value = (draft && draft.note) || dayNotes[date] || "";
+
   if(activeMaterials.length === 0){
     tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No active materials to log. Add one, or mark a draft material active, under the Materials tab.</div></td></tr>`;
+    $("registerProgress").textContent = "";
     return;
   }
 
   const groups = materialsByCategory(activeMaterials);
   let html = "";
+  let enteredCount = 0;
   CATEGORIES.filter(c => groups[c].length > 0).forEach(cat => {
     html += `<tr class="cat-row"><td colspan="6">${cat}</td></tr>`;
     const sorted = groups[cat].slice().sort((a,b) => {
@@ -1011,31 +1113,42 @@ function renderRegisterTable(){
     });
     sorted.forEach(m => {
       const existing = getRegister(m.id, date);
+      const draftEntry = draft && draft.entries[m.id];
       const opening = openingForDate(m.id, date);
-      const purchase = existing ? existing.purchase : 0;
-      const wastage = existing ? existing.wastage : 0;
-      const closing = existing ? existing.closing : 0;
+      const purchase = draftEntry && draftEntry.purchase !== undefined ? draftEntry.purchase : (existing ? existing.purchase : 0);
+      const wastage = draftEntry && draftEntry.wastage !== undefined ? draftEntry.wastage : (existing ? existing.wastage : 0);
+      const closing = draftEntry && draftEntry.closing !== undefined ? draftEntry.closing : (existing ? existing.closing : 0);
       const usage = opening + Number(purchase) - Number(wastage) - Number(closing);
+      const isEntered = !!existing;
+      if(isEntered) enteredCount++;
       html += `
-        <tr data-material="${m.id}">
+        <tr data-material="${m.id}" data-search="${(m.name+' '+(m.groupName||'')).toLowerCase()}" class="${isEntered ? 'entered' : ''}">
           <td>
-            <div class="mat-name">${m.name}</div>
+            <div class="mat-name">${isEntered ? '<span class="entered-check" title="Already saved for this day">✓</span>' : ''}${m.name}</div>
             <div class="mat-unit">${m.unit||''}</div>
           </td>
           <td class="num"><span class="opening-val" data-opening>${opening}</span></td>
           <td class="num"><input class="reg-input" type="number" step="1" data-field="purchase" value="${purchase}" /></td>
           <td class="num"><input class="reg-input" type="number" step="1" data-field="wastage" value="${wastage}" /></td>
-          <td class="num"><input class="reg-input" type="number" step="1" data-field="closing" value="${closing}" /></td>
+          <td class="num">
+            <input class="reg-input" type="number" step="1" data-field="closing" value="${closing}" />
+            <div class="odd-warning-note" data-odd-note style="display:none;">Usage would be negative — check this count.</div>
+          </td>
           <td class="num"><span class="usage-val ${usage < 0 ? 'negative' : ''}" data-usage>${fmtNum(usage)}</span></td>
         </tr>`;
     });
   });
   tbody.innerHTML = html;
+  $("registerProgress").textContent = `${enteredCount} of ${activeMaterials.length} entered today`;
 
-  // live-recompute usage as the person types, without saving yet
+  // live-recompute usage as the person types, mirror to the local draft,
+  // and flag physically-impossible counts (usage below zero).
   tbody.querySelectorAll("tr[data-material]").forEach(row => {
+    const materialId = row.dataset.material;
     const openingEl = row.querySelector("[data-opening]");
     const usageEl = row.querySelector("[data-usage]");
+    const closingInput = row.querySelector('[data-field="closing"]');
+    const oddNote = row.querySelector("[data-odd-note]");
     const opening = Number(openingEl.textContent);
     row.querySelectorAll(".reg-input").forEach(input => {
       input.addEventListener("input", () => {
@@ -1045,9 +1158,14 @@ function renderRegisterTable(){
         const u = opening + p - w - c;
         usageEl.textContent = fmtNum(u);
         usageEl.classList.toggle("negative", u < 0);
+        closingInput.classList.toggle("odd-warning", u < 0);
+        oddNote.style.display = u < 0 ? "block" : "none";
+        updateDraftEntry(date, materialId, input.dataset.field, Math.round(Number(input.value || 0)));
       });
     });
   });
+
+  applyRegisterSearch();
 
   // Enter/ArrowDown move to the same field in the next row, ArrowUp to the
   // previous row (spreadsheet-style); Left/Right arrows move between
@@ -1082,9 +1200,46 @@ function renderRegisterTable(){
     });
   });
 }
+function applyRegisterSearch(){
+  const term = ($("registerSearch").value || "").trim().toLowerCase();
+  document.querySelectorAll("#registerTableBody tr[data-material]").forEach(row => {
+    row.classList.toggle("hidden-by-search", !!term && !row.dataset.search.includes(term));
+  });
+  // Hide a category header if every row under it is filtered out
+  document.querySelectorAll("#registerTableBody tr.cat-row").forEach(catRow => {
+    let sibling = catRow.nextElementSibling;
+    let anyVisible = false;
+    while(sibling && !sibling.classList.contains("cat-row")){
+      if(!sibling.classList.contains("hidden-by-search")) anyVisible = true;
+      sibling = sibling.nextElementSibling;
+    }
+    catRow.style.display = anyVisible ? "" : "none";
+  });
+}
+$("registerSearch").addEventListener("input", applyRegisterSearch);
+$("registerNote").addEventListener("input", () => {
+  updateDraftNote($("registerDate").value || todayISO(), $("registerNote").value);
+});
+$("copyYesterdayBtn").addEventListener("click", () => {
+  const date = $("registerDate").value || todayISO();
+  const yesterday = addDays(date, -1);
+  let copied = 0;
+  document.querySelectorAll("#registerTableBody tr[data-material]").forEach(row => {
+    const materialId = row.dataset.material;
+    const yReg = getRegister(materialId, yesterday);
+    if(yReg && Number(yReg.purchase) > 0){
+      const input = row.querySelector('[data-field="purchase"]');
+      input.value = yReg.purchase;
+      input.dispatchEvent(new Event("input"));
+      copied++;
+    }
+  });
+  showToast(copied > 0 ? `Copied ${copied} purchase quantities from yesterday.` : "Yesterday had no purchases to copy.");
+});
 
 $("saveRegisterBtn").addEventListener("click", () => {
   const date = $("registerDate").value || todayISO();
+  const note = $("registerNote").value.trim();
   const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
   const entries = rows.map(row => ({
     materialId: row.dataset.material,
@@ -1105,14 +1260,19 @@ $("saveRegisterBtn").addEventListener("click", () => {
       registers.push(reg);
     }
   });
+  dayNotes[date] = note;
+  clearDraftForDate(date); // the draft's job is done — Firestore is now the source of truth for this date
   recalcAll();
   renderAll();
   showToast(`Saved register for ${fmtDate(date)}.`);
 
-  Promise.all(entries.map(({ materialId, purchase, wastage, closing }) => {
+  const writes = entries.map(({ materialId, purchase, wastage, closing }) => {
     const regId = `${materialId}_${date}`;
     return setDoc(doc(db, REGISTERS_COL, regId), { materialId, date, purchase, wastage, closing }, { merge: true });
-  })).catch(err => {
+  });
+  writes.push(setDoc(doc(db, DAY_NOTES_COL, date), { note }, { merge: true }));
+
+  Promise.all(writes).catch(err => {
     console.error("Failed to sync register:", err);
     showToast("Saved on screen, but syncing failed — check your connection and try Save Day again.", true);
   });
@@ -1366,6 +1526,93 @@ document.querySelectorAll('#historyViewToggle .type-pill').forEach(btn => {
   });
 });
 
+let analyticsGranularity = "weekly";
+document.querySelectorAll("#analyticsGranularityToggle .type-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#analyticsGranularityToggle .type-pill").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    analyticsGranularity = btn.dataset.granularity;
+    renderHistory();
+  });
+});
+
+// Monday of the week containing this date — used to bucket "weekly" data.
+function weekStartOf(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toLocalISO(d);
+}
+function bucketKeyOf(dateStr, granularity){
+  if(granularity === "daily") return dateStr;
+  if(granularity === "weekly") return weekStartOf(dateStr);
+  return dateStr.slice(0, 7); // monthly: YYYY-MM
+}
+function bucketLabelOf(key, granularity){
+  if(granularity === "monthly"){
+    const d = new Date(key + "-01T00:00:00");
+    return d.toLocaleDateString('en-IN', { month:'short', year:'2-digit' });
+  }
+  if(granularity === "weekly"){
+    const d = new Date(key + "T00:00:00");
+    return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+  }
+  const d = new Date(key + "T00:00:00");
+  return d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+}
+const BUCKET_LIMIT = { daily: 14, weekly: 10, monthly: 6 };
+
+function renderAnalytics(rows){
+  const granularity = analyticsGranularity;
+  const buckets = {};
+  rows.forEach(r => {
+    const key = bucketKeyOf(r.date, granularity);
+    if(!buckets[key]) buckets[key] = { purchase:0, usage:0, wastage:0 };
+    buckets[key].purchase += Number(r.purchase||0);
+    buckets[key].usage += Number(r.usage||0);
+    buckets[key].wastage += Number(r.wastage||0);
+  });
+  const keys = Object.keys(buckets).sort().slice(-BUCKET_LIMIT[granularity]);
+
+  // Summary stats across the whole filtered range (not just the visible buckets)
+  const totals = rows.reduce((acc, r) => {
+    acc.purchase += Number(r.purchase||0);
+    acc.usage += Number(r.usage||0);
+    acc.wastage += Number(r.wastage||0);
+    return acc;
+  }, { purchase:0, usage:0, wastage:0 });
+  const outflow = totals.usage + totals.wastage;
+  const wastagePct = outflow > 0 ? Math.round((totals.wastage / outflow) * 100) : 0;
+
+  $("analyticsStats").innerHTML = `
+    <div class="stat-card"><div class="num">${fmtNum(totals.purchase)}</div><div class="label">Total purchased</div></div>
+    <div class="stat-card"><div class="num">${fmtNum(totals.usage)}</div><div class="label">Total used</div></div>
+    <div class="stat-card warn"><div class="num">${fmtNum(totals.wastage)}</div><div class="label">Total wasted</div></div>
+    <div class="stat-card ${wastagePct >= 15 ? 'warn' : ''}"><div class="num">${wastagePct}%</div><div class="label">Wastage rate</div></div>
+  `;
+
+  const chartEl = $("analyticsChart");
+  if(keys.length === 0){
+    chartEl.innerHTML = `<div class="empty-state">No data yet for this range.</div>`;
+    return;
+  }
+  const maxVal = Math.max(1, ...keys.map(k => Math.max(buckets[k].purchase, buckets[k].usage, buckets[k].wastage)));
+  chartEl.innerHTML = `<div class="chart-wrap">${keys.map(key => {
+    const b = buckets[key];
+    const h = v => Math.max(2, Math.round((v / maxVal) * 140));
+    return `
+      <div class="chart-bucket" title="${bucketLabelOf(key, granularity)} — Purchase ${fmtNum(b.purchase)}, Usage ${fmtNum(b.usage)}, Wastage ${fmtNum(b.wastage)}">
+        <div class="chart-bars">
+          <div class="chart-bar purchase" style="height:${h(b.purchase)}px;"></div>
+          <div class="chart-bar usage" style="height:${h(b.usage)}px;"></div>
+          <div class="chart-bar wastage" style="height:${h(b.wastage)}px;"></div>
+        </div>
+        <div class="chart-bucket-label">${bucketLabelOf(key, granularity)}</div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
 function renderHistory(){
   const fCategory = $("filterCategory").value;
   const fMaterial = $("filterMaterial").value;
@@ -1380,6 +1627,9 @@ function renderHistory(){
     if(fTo && r.date > fTo) return false;
     return true;
   }).slice().sort((a,b) => a.date < b.date ? 1 : -1);
+
+  lastHistoryRows = rows;
+  renderAnalytics(rows);
 
   const theadRow = document.querySelector("table.history thead tr");
   $("historyEmptyState").style.display = rows.length ? "none" : "block";
@@ -1439,6 +1689,57 @@ function renderHistory(){
       </tr>`;
   }).join("");
 }
+
+/* ---------- CSV EXPORT ---------- */
+function csvEscape(val){
+  const s = String(val ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadCsv(filename, rowsOfArrays){
+  const csv = rowsOfArrays.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }); // BOM so Excel reads ₹/special chars correctly
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+$("exportCsvBtn").addEventListener("click", () => {
+  if(lastHistoryRows.length === 0){ showToast("Nothing to export for the current filters.", true); return; }
+  const today = todayISO();
+
+  if(historyViewMode === "byday"){
+    const byDate = {};
+    lastHistoryRows.forEach(r => {
+      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, wastage:0, closing:0, usage:0 };
+      const d = byDate[r.date];
+      d.count += 1;
+      d.opening += Number(r.opening||0);
+      d.purchase += Number(r.purchase||0);
+      d.wastage += Number(r.wastage||0);
+      d.closing += Number(r.closing||0);
+      d.usage += Number(r.usage||0);
+    });
+    const dates = Object.keys(byDate).sort();
+    const out = [["Date","Materials Logged","Opening (total)","Purchase","Wastage","Closing (total)","Usage"]];
+    dates.forEach(date => {
+      const d = byDate[date];
+      out.push([fmtDate(date), d.count, d.opening, d.purchase, d.wastage, d.closing, d.usage]);
+    });
+    downloadCsv(`hanabee-ledger-byday-${today}.csv`, out);
+  }else{
+    const out = [["Date","Material","Category","Opening","Purchase","Wastage","Closing","Usage"]];
+    lastHistoryRows.forEach(r => {
+      const m = materials.find(x => x.id === r.materialId);
+      out.push([fmtDate(r.date), m ? m.name : "(deleted)", m ? m.category : "", r.opening, r.purchase, r.wastage, r.closing, r.usage]);
+    });
+    downloadCsv(`hanabee-ledger-detailed-${today}.csv`, out);
+  }
+  showToast("CSV downloaded.");
+});
 
 /* ---------- INIT ---------- */
 function renderAll(){
