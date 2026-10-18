@@ -345,6 +345,13 @@
       <button class="btn btn-outline" id="copyYesterdayBtn">Copy yesterday's purchases</button>
       <span id="registerProgress" style="font-size:0.78rem; color:var(--charcoal-soft);"></span>
     </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
+      <button class="btn btn-outline" id="exportDayBtn">⬇ Export this day</button>
+      <span style="font-size:0.75rem; color:var(--charcoal-soft); margin-left:6px;">or a range:</span>
+      <input type="date" id="exportFrom" title="From" />
+      <input type="date" id="exportTo" title="To" />
+      <button class="btn btn-outline" id="exportRangeBtn">⬇ Export range</button>
+    </div>
     <div class="card">
       <div class="field" style="margin-bottom:16px; max-width:480px;">
         <label>Note for this day (optional)</label>
@@ -664,6 +671,8 @@ onAuthStateChanged(auth, (user) => {
 function startListeners(){
   $("todayLabel").textContent = fmtDate(todayISO());
   $("registerDate").value = todayISO();
+  $("exportTo").value = todayISO();
+  $("exportFrom").value = addDays(todayISO(), -6);
 
   onSnapshot(collection(db, MATERIALS_COL), (snap) => {
     materials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1739,6 +1748,54 @@ $("exportCsvBtn").addEventListener("click", () => {
     downloadCsv(`hanabee-ledger-detailed-${today}.csv`, out);
   }
   showToast("CSV downloaded.");
+});
+
+/* ---------- DAILY REGISTER EXPORT ---------- */
+const REGISTER_CSV_HEADER = ["Date","Material","Variant Group","Category","Colour","Unit","Opening","Purchase","Wastage","Closing","Usage","Saved","Day Note"];
+
+// One day: exports what's on screen for that date (every active material,
+// including ones not yet saved), so it matches what the person is looking at.
+$("exportDayBtn").addEventListener("click", () => {
+  const date = $("registerDate").value || todayISO();
+  const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
+  if(rows.length === 0){ showToast("Nothing to export for this day.", true); return; }
+  const note = $("registerNote").value.trim();
+  const out = [REGISTER_CSV_HEADER];
+  rows.forEach(row => {
+    const m = materials.find(x => x.id === row.dataset.material);
+    if(!m) return;
+    const opening = Number(row.querySelector("[data-opening]").textContent);
+    const purchase = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
+    const wastage = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
+    const closing = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
+    const usage = opening + purchase - wastage - closing;
+    out.push([fmtDate(date), m.name, m.groupName || "", m.category || "", m.color || "", m.unit || "",
+      opening, purchase, wastage, closing, usage, getRegister(m.id, date) ? "Yes" : "No", note]);
+  });
+  out.sort((a,b) => a === REGISTER_CSV_HEADER ? -1 : b === REGISTER_CSV_HEADER ? 1 : String(a[1]).localeCompare(String(b[1])));
+  downloadCsv(`hanabee-register-${date}.csv`, out);
+  showToast(`Exported ${fmtDate(date)}.`);
+});
+
+// Range: exports saved entries between From and To (inclusive), oldest first.
+$("exportRangeBtn").addEventListener("click", () => {
+  const from = $("exportFrom").value;
+  const to = $("exportTo").value;
+  if(!from || !to){ showToast("Pick both a From and a To date.", true); return; }
+  if(from > to){ showToast("'From' date is after 'To' date.", true); return; }
+  const inRange = registers.filter(r => r.date >= from && r.date <= to)
+    .sort((a,b) => a.date === b.date
+      ? ((materials.find(x => x.id === a.materialId)?.name || "").localeCompare(materials.find(x => x.id === b.materialId)?.name || ""))
+      : (a.date < b.date ? -1 : 1));
+  if(inRange.length === 0){ showToast("No saved entries in that range.", true); return; }
+  const out = [REGISTER_CSV_HEADER];
+  inRange.forEach(r => {
+    const m = materials.find(x => x.id === r.materialId);
+    out.push([fmtDate(r.date), m ? m.name : "(deleted)", m?.groupName || "", m?.category || "", m?.color || "", m?.unit || "",
+      r.opening, r.purchase, r.wastage, r.closing, r.usage, "Yes", dayNotes[r.date] || ""]);
+  });
+  downloadCsv(`hanabee-register-${from}_to_${to}.csv`, out);
+  showToast(`Exported ${fmtDate(from)} – ${fmtDate(to)}.`);
 });
 
 /* ---------- INIT ---------- */
