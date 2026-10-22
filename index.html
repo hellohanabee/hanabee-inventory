@@ -155,6 +155,10 @@
     border-radius:50%; background:var(--forest); color:var(--white); font-size:0.6rem; margin-right:6px; flex-shrink:0;
   }
   table.register tr.hidden-by-search{ display:none; }
+  table.register tr.edited td{ background:#FFFAEB; }
+  table.register tr.active-row td{ background:#EAF2E8; }
+  table.register tr.active-row td:first-child{ box-shadow:inset 4px 0 0 var(--gold); }
+  table.register tr.active-row .mat-name{ color:var(--forest-deep); font-weight:600; }
   table.register input.reg-input.odd-warning{ border-color:var(--danger); background:#FBF0EE; }
   .odd-warning-note{ font-size:0.68rem; color:var(--danger); margin-top:2px; }
 
@@ -374,6 +378,7 @@
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="saveRegisterBtn">Save Day</button>
+        <span id="saveStatus" style="font-size:0.8rem; font-weight:500;"></span>
         <span class="locked-note">Usage = Opening + Purchase − Wastage − Closing. Enter today's actual physical count as Closing and usage is worked out for you.</span>
       </div>
     </div>
@@ -549,7 +554,8 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc,
+  getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, addDoc, setDoc, updateDoc, deleteDoc, writeBatch,
   onSnapshot, query, where, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -577,7 +583,15 @@ const AUTHORISED_EMAILS = [
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Persistent local cache: any write that hasn't reached the server yet is kept
+// in the browser and sent on the next load, so a refresh can't lose it.
+let db;
+try{
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+}catch(e){
+  console.warn("Offline persistence unavailable, using default Firestore.", e);
+  db = getFirestore(app);
+}
 const storage = getStorage(app);
 const provider = new GoogleAuthProvider();
 
@@ -1078,7 +1092,9 @@ function saveDraftStore(store){
 function getDraftForDate(date){
   return loadDraftStore()[date] || null;
 }
+let lastDraftEditTs = 0;
 function updateDraftEntry(date, materialId, field, value){
+  lastDraftEditTs = Date.now();
   const store = loadDraftStore();
   if(!store[date]) store[date] = { note:"", entries:{} };
   if(!store[date].entries[materialId]) store[date].entries[materialId] = {};
@@ -1086,6 +1102,7 @@ function updateDraftEntry(date, materialId, field, value){
   saveDraftStore(store);
 }
 function updateDraftNote(date, note){
+  lastDraftEditTs = Date.now();
   const store = loadDraftStore();
   if(!store[date]) store[date] = { note:"", entries:{} };
   store[date].note = note;
@@ -1131,7 +1148,7 @@ function renderRegisterTable(){
       const isEntered = !!existing;
       if(isEntered) enteredCount++;
       html += `
-        <tr data-material="${m.id}" data-search="${(m.name+' '+(m.groupName||'')).toLowerCase()}" class="${isEntered ? 'entered' : ''}">
+        <tr data-material="${m.id}" data-search="${(m.name+' '+(m.groupName||'')).toLowerCase()}" class="${isEntered ? 'entered' : ''} ${draftEntry ? 'edited' : ''}">
           <td>
             <div class="mat-name">${isEntered ? '<span class="entered-check" title="Already saved for this day">✓</span>' : ''}${m.name}</div>
             <div class="mat-unit">${m.unit||''}</div>
@@ -1170,6 +1187,7 @@ function renderRegisterTable(){
         closingInput.classList.toggle("odd-warning", u < 0);
         oddNote.style.display = u < 0 ? "block" : "none";
         updateDraftEntry(date, materialId, input.dataset.field, Math.round(Number(input.value || 0)));
+        row.classList.add("edited");
       });
     });
   });
@@ -1226,6 +1244,12 @@ function applyRegisterSearch(){
   });
 }
 $("registerSearch").addEventListener("input", applyRegisterSearch);
+// Highlight the row being worked on so you never lose your place.
+$("registerTableBody").addEventListener("focusin", (e) => {
+  const row = e.target.closest("tr[data-material]");
+  document.querySelectorAll("#registerTableBody tr.active-row").forEach(r => r.classList.remove("active-row"));
+  if(row) row.classList.add("active-row");
+});
 $("registerNote").addEventListener("input", () => {
   updateDraftNote($("registerDate").value || todayISO(), $("registerNote").value);
 });
@@ -1246,7 +1270,20 @@ $("copyYesterdayBtn").addEventListener("click", () => {
   showToast(copied > 0 ? `Copied ${copied} purchase quantities from yesterday.` : "Yesterday had no purchases to copy.");
 });
 
-$("saveRegisterBtn").addEventListener("click", () => {
+let pendingSaves = 0;
+function setSaveStatus(state, detail){
+  const el = $("saveStatus");
+  if(state === "saving"){ el.style.color = "var(--gold)"; el.textContent = "⏳ Saving to cloud… please don't close this page"; }
+  else if(state === "saved"){ el.style.color = "var(--forest)"; el.textContent = "✓ Saved to cloud"; setTimeout(() => { if(pendingSaves === 0 && el.textContent.startsWith("✓")) el.textContent = ""; }, 6000); }
+  else if(state === "error"){ el.style.color = "var(--danger)"; el.textContent = "⚠ NOT saved to cloud" + (detail ? ` (${detail})` : "") + " — your entries are kept on this device. Press Save Day again."; }
+  else { el.textContent = ""; }
+}
+// Warn before leaving the page while a save is still in flight.
+window.addEventListener("beforeunload", (e) => {
+  if(pendingSaves > 0){ e.preventDefault(); e.returnValue = ""; }
+});
+
+$("saveRegisterBtn").addEventListener("click", async () => {
   const date = $("registerDate").value || todayISO();
   const note = $("registerNote").value.trim();
   const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
@@ -1256,35 +1293,53 @@ $("saveRegisterBtn").addEventListener("click", () => {
     wastage: Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0)),
     closing: Math.round(Number(row.querySelector('[data-field="closing"]').value || 0))
   }));
+  if(entries.length === 0) return;
 
-  // Optimistic update: apply instantly to local state and re-render right away,
-  // instead of waiting on the round-trip to Firestore — the write happens
-  // in the background and the real-time listener will reconcile silently.
+  // Show the numbers on screen straight away (optimistic) — but nothing is
+  // called "saved" until the cloud confirms, and the local draft is kept
+  // until then so a failure or refresh can never lose the entries.
   entries.forEach(({ materialId, purchase, wastage, closing }) => {
     let reg = getRegister(materialId, date);
     if(reg){
       reg.purchase = purchase; reg.wastage = wastage; reg.closing = closing;
     }else{
-      reg = { id: `local_${materialId}_${date}`, materialId, date, purchase, wastage, closing };
-      registers.push(reg);
+      registers.push({ id: `local_${materialId}_${date}`, materialId, date, purchase, wastage, closing });
     }
   });
   dayNotes[date] = note;
-  clearDraftForDate(date); // the draft's job is done — Firestore is now the source of truth for this date
   recalcAll();
   renderAll();
-  showToast(`Saved register for ${fmtDate(date)}.`);
 
-  const writes = entries.map(({ materialId, purchase, wastage, closing }) => {
-    const regId = `${materialId}_${date}`;
-    return setDoc(doc(db, REGISTERS_COL, regId), { materialId, date, purchase, wastage, closing }, { merge: true });
-  });
-  writes.push(setDoc(doc(db, DAY_NOTES_COL, date), { note }, { merge: true }));
+  const clickTs = Date.now();
+  pendingSaves++;
+  $("saveRegisterBtn").disabled = true;
+  setSaveStatus("saving");
+  try{
+    // One batched commit = one network round-trip, and all-or-nothing.
+    const batch = writeBatch(db);
+    entries.forEach(({ materialId, purchase, wastage, closing }) => {
+      batch.set(doc(db, REGISTERS_COL, `${materialId}_${date}`), { materialId, date, purchase, wastage, closing }, { merge: true });
+    });
+    await batch.commit();
+    if(lastDraftEditTs <= clickTs) clearDraftForDate(date); // nothing typed since clicking Save
+    setSaveStatus("saved");
+    showToast(`Saved register for ${fmtDate(date)} ✓`);
+  }catch(err){
+    console.error("Failed to save register:", err);
+    setSaveStatus("error", err.code || err.message);
+    showToast("Save FAILED — see the red message by the Save button.", true);
+  }finally{
+    pendingSaves--;
+    $("saveRegisterBtn").disabled = false;
+  }
 
-  Promise.all(writes).catch(err => {
-    console.error("Failed to sync register:", err);
-    showToast("Saved on screen, but syncing failed — check your connection and try Save Day again.", true);
-  });
+  // The day note is saved separately so a problem with it can never block the register itself.
+  try{
+    await setDoc(doc(db, DAY_NOTES_COL, date), { note }, { merge: true });
+  }catch(err){
+    console.error("Failed to save day note:", err);
+    showToast(`Register saved, but the day note couldn't be saved (${err.code || "error"}). Check the hb_day_notes Firestore rule.`, true);
+  }
 });
 
 /* ---------- MATERIALS CRUD ---------- */
