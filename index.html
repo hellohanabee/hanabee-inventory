@@ -155,6 +155,9 @@
     border-radius:50%; background:var(--forest); color:var(--white); font-size:0.6rem; margin-right:6px; flex-shrink:0;
   }
   table.register tr.hidden-by-search{ display:none; }
+  table.register input.reg-input[readonly]{ background:var(--sage); border-color:transparent; color:var(--forest-deep); font-weight:500; cursor:default; }
+  .bunch-eq{ font-size:0.68rem; color:var(--charcoal-soft); margin-top:3px; min-height:0.9em; }
+  .purchase-src{ font-size:0.65rem; color:var(--charcoal-soft); margin-top:3px; }
   table.register tr.edited td{ background:#FFFAEB; }
   table.register tr.active-row td{ background:#EAF2E8; }
   table.register tr.active-row td:first-child{ box-shadow:inset 4px 0 0 var(--gold); }
@@ -295,6 +298,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-view="dashboard">Dashboard</button>
   <button class="tab-btn" data-view="bycolor">By Colour</button>
+  <button class="tab-btn" data-view="purchases">Purchases</button>
   <button class="tab-btn" data-view="register">Daily Register</button>
   <button class="tab-btn" data-view="materials">Materials</button>
   <button class="tab-btn" data-view="history">History</button>
@@ -330,6 +334,64 @@
     <div id="dashboardByColor"></div>
   </section>
 
+  <!-- ---------- PURCHASES ---------- -->
+  <section class="view" id="view-purchases">
+    <div class="view-header"><div class="view-title">Purchases</div></div>
+
+    <div class="card" style="margin-bottom:18px;">
+      <p class="section-label" id="purchaseFormTitle">Add a purchase</p>
+      <form id="purchaseForm" autocomplete="off">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:14px;">
+          <div class="field"><label>Date</label><input type="date" id="pDate" required /></div>
+          <div class="field"><label>Flower</label>
+            <input type="text" id="pFlower" list="pFlowerList" placeholder="Start typing a name…" required />
+            <datalist id="pFlowerList"></datalist>
+          </div>
+          <div class="field"><label>Quantity</label><input type="number" id="pQty" min="1" step="1" required /></div>
+          <div class="field"><label>Bought in</label>
+            <select id="pUnit"><option value="bunches">Bunches</option><option value="stems">Stems</option></select>
+          </div>
+          <div class="field" id="pSpbField"><label>Stems per bunch</label><input type="number" id="pSpb" min="1" step="1" placeholder="e.g. 10" /></div>
+          <div class="field"><label>Vendor (optional)</label>
+            <input type="text" id="pVendor" list="pVendorList" placeholder="e.g. LR Farms" />
+            <datalist id="pVendorList"></datalist>
+          </div>
+          <div class="field"><label>Total cost ₹ (optional)</label><input type="number" id="pCost" min="0" step="1" /></div>
+          <div class="field"><label>Note (optional)</label><input type="text" id="pNote" /></div>
+        </div>
+        <div id="pPreview" style="margin-top:12px; font-size:0.88rem; color:var(--forest-deep); min-height:1.2em;"></div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="pSubmitBtn">Add purchase</button>
+          <button type="button" class="btn btn-outline" id="pCancelEditBtn" style="display:none;">Cancel edit</button>
+          <span id="purchaseStatus" style="font-size:0.8rem; font-weight:500;"></span>
+        </div>
+        <p class="locked-note" style="margin-top:10px;">Purchases entered here flow into the Daily Register's Purchase column automatically — stock updates once you enter that day's closing count.</p>
+      </form>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px;">
+        <input type="date" id="pFilterFrom" title="From" />
+        <input type="date" id="pFilterTo" title="To" />
+        <div class="search-bar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="pFilterSearch" placeholder="Search flower or vendor…" />
+        </div>
+        <button class="btn btn-outline" id="pExportBtn">⬇ Export CSV</button>
+      </div>
+      <p id="pSummary" style="font-size:0.8rem; color:var(--charcoal-soft); margin-bottom:10px;"></p>
+      <div style="overflow-x:auto;">
+        <table class="history">
+          <thead><tr>
+            <th>Date</th><th>Flower</th><th>Bought</th><th class="num">Total</th><th>Vendor</th><th class="num">Cost</th><th>Note</th><th></th>
+          </tr></thead>
+          <tbody id="purchaseTableBody"></tbody>
+        </table>
+        <div class="empty-state" id="purchaseEmpty" style="display:none;">No purchases in this range yet.</div>
+      </div>
+    </div>
+  </section>
+
   <!-- ---------- DAILY REGISTER ---------- -->
   <section class="view" id="view-register">
     <div class="view-header">
@@ -346,7 +408,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="registerSearch" placeholder="Search flower or group…" />
       </div>
-      <button class="btn btn-outline" id="copyYesterdayBtn">Copy yesterday's purchases</button>
       <span id="registerProgress" style="font-size:0.78rem; color:var(--charcoal-soft);"></span>
     </div>
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px;">
@@ -367,7 +428,7 @@
             <tr>
               <th>Material</th>
               <th class="num">Opening</th>
-              <th class="num">Purchase</th>
+              <th class="num">Purchase (from Purchases tab)</th>
               <th class="num">Wastage</th>
               <th class="num">Closing (physical count)</th>
               <th class="num">Usage (auto)</th>
@@ -510,6 +571,11 @@
           <input type="number" id="matInitialStock" min="0" step="1" value="0" />
         </div>
         <div class="field">
+          <label>Stems per bunch (optional)</label>
+          <input type="number" id="matSpb" min="0" step="1" placeholder="e.g. 10" />
+          <span style="font-size:0.72rem; color:var(--charcoal-soft);">For flowers counted in stems. Lets you buy in bunches (auto-converted to stems) and see stock as bunches.</span>
+        </div>
+        <div class="field">
           <label>Low stock alert threshold</label>
           <input type="number" id="matReorderLevel" min="0" step="1" value="10" />
         </div>
@@ -598,6 +664,11 @@ const provider = new GoogleAuthProvider();
 const MATERIALS_COL = "hb_materials";
 const REGISTERS_COL = "hb_registers";
 const DAY_NOTES_COL = "hb_day_notes";
+const PURCHASES_COL = "hb_purchases";
+let purchases = [];            // every purchase entry
+let purchasesByMaterial = {};  // { materialId: [entries sorted by date] }
+let editingPurchaseId = null;
+let materialsLoaded = false, registersLoaded = false, purchasesLoaded = false;
 let currentUser = null;
 let dayNotes = {}; // { [date]: note string }
 
@@ -686,19 +757,32 @@ function startListeners(){
   $("todayLabel").textContent = fmtDate(todayISO());
   $("registerDate").value = todayISO();
   $("exportTo").value = todayISO();
+  $("pDate").value = todayISO();
+  $("pFilterTo").value = todayISO();
+  $("pFilterFrom").value = addDays(todayISO(), -6);
   $("exportFrom").value = addDays(todayISO(), -6);
 
   onSnapshot(collection(db, MATERIALS_COL), (snap) => {
     materials = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    materialsLoaded = true;
     recalcAll();
     renderAll();
   }, (err) => { console.error(err); showToast("Couldn't load materials.", true); });
 
   onSnapshot(collection(db, REGISTERS_COL), (snap) => {
     registers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    registersLoaded = true;
     recalcAll();
     renderAll();
   }, (err) => { console.error(err); showToast("Couldn't load ledger history.", true); });
+
+  onSnapshot(collection(db, PURCHASES_COL), (snap) => {
+    purchases = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    purchasesLoaded = true;
+    rebuildPurchaseIndex();
+    recalcAll();
+    renderAll();
+  }, (err) => { console.error(err); showToast("Couldn't load purchases — check the hb_purchases Firestore rule.", true); });
 
   onSnapshot(collection(db, DAY_NOTES_COL), (snap) => {
     dayNotes = {};
@@ -717,18 +801,57 @@ function getRegister(materialId, date){
 // Recompute opening/usage for every register of a material, in date order.
 // Closing is treated as ground truth (the physical count entered that day);
 // usage is back-calculated from it.
+function rebuildPurchaseIndex(){
+  purchasesByMaterial = {};
+  purchases.forEach(p => {
+    if(!purchasesByMaterial[p.materialId]) purchasesByMaterial[p.materialId] = [];
+    purchasesByMaterial[p.materialId].push(p);
+  });
+  Object.values(purchasesByMaterial).forEach(list => list.sort((a,b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAtMs||0) - (b.createdAtMs||0)));
+}
+// A register's Purchase is the total of purchase entries made since the previous
+// counted day (up to and including this day). Days saved before the Purchases tab
+// existed have no entries, so their typed value is kept as it was.
 function recalcMaterial(materialId){
   const material = materials.find(m => m.id === materialId);
   const chain = getRegistersForMaterial(materialId);
+  const plist = purchasesByMaterial[materialId] || [];
+  let pi = 0;
   let running = material ? Number(material.initialStock||0) : 0;
   chain.forEach(r => {
+    if(r._storedPurchase === undefined) r._storedPurchase = Math.round(Number(r.purchase||0));
+    const entries = [];
+    while(pi < plist.length && plist[pi].date <= r.date){ entries.push(plist[pi]); pi++; }
+    r._entries = entries;
     r.opening = Math.round(running);
-    r.purchase = Math.round(Number(r.purchase||0));
+    if(entries.length) r.purchase = Math.round(entries.reduce((sum,e) => sum + Number(e.baseQty||0), 0));
+    else r.purchase = r.purchaseFromEntries ? 0 : r._storedPurchase;
     r.wastage = Math.round(Number(r.wastage||0));
     r.closing = Math.round(Number(r.closing||0));
     r.usage = r.opening + r.purchase - r.wastage - r.closing;
     running = r.closing;
   });
+}
+// What the Daily Register should show as Purchase for a material on a date.
+function effectivePurchaseForDate(materialId, date){
+  const existing = getRegister(materialId, date);
+  if(existing) return { value: existing.purchase, fromEntries: (existing._entries||[]).length > 0, count: (existing._entries||[]).length };
+  let prev = null;
+  for(const r of getRegistersForMaterial(materialId)){ if(r.date < date) prev = r.date; else break; }
+  let sum = 0, count = 0;
+  (purchasesByMaterial[materialId] || []).forEach(p => {
+    if(p.date <= date && (!prev || p.date > prev)){ sum += Number(p.baseQty||0); count++; }
+  });
+  return { value: Math.round(sum), fromEntries: count > 0, count };
+}
+// "6 bunches + 3 stems" — only for flowers counted in stems with a known bunch size.
+function bunchEquiv(m, stock){
+  const spb = Number(m && m.stemsPerBunch || 0);
+  stock = Math.round(Number(stock||0));
+  if(!m || m.unit !== "stems" || spb <= 0 || stock < spb) return "";
+  const b = Math.floor(stock / spb), rest = stock % spb;
+  return `${b} bunch${b>1?'es':''}${rest ? ` + ${rest} stems` : ''}`;
 }
 function recalcAll(){ materials.forEach(m => recalcMaterial(m.id)); }
 function currentStockOf(materialId){
@@ -790,7 +913,10 @@ function getBatchesForMaterial(materialId){
   }
 
   chain.forEach(r => {
-    if(Number(r.purchase) > 0){
+    if(r._entries && r._entries.length){
+      r._entries.forEach(e => { if(Number(e.baseQty) > 0) batches.push({ date: e.date, qty: Number(e.baseQty) }); });
+      batches.sort((a,b) => (a.date||"") < (b.date||"") ? -1 : (a.date||"") > (b.date||"") ? 1 : 0); // keep oldest first
+    }else if(Number(r.purchase) > 0){
       batches.push({ date: r.date, qty: Number(r.purchase) });
     }
     let outflow = Math.max(0, Number(r.opening||0) + Number(r.purchase||0) - Number(r.closing||0));
@@ -965,7 +1091,7 @@ function renderVariantsModal(title, variants){
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           ${m.photoUrl ? `<img class="mat-thumb-sm" src="${m.photoUrl}" alt="${m.name}" onerror="this.style.display='none';" />` : ''}
           <div class="vn" style="flex:1;">${swatch}${m.name} ${isLow ? '<span class="low-badge" style="position:static; display:inline-block;">Low</span>' : ''}</div>
-          <div class="vs" style="${isLow ? 'color:var(--rose-deep);' : ''}">${fmtNum(stock)} ${m.unit||''}</div>
+          <div><div class="vs" style="${isLow ? 'color:var(--rose-deep);' : ''}">${fmtNum(stock)} ${m.unit||''}</div><div class="bunch-eq" style="text-align:right;">${bunchEquiv(m, stock)}</div></div>
         </div>
         <div class="batch-list">
           ${batchesOldestFirst.length === 0
@@ -1128,6 +1254,13 @@ function renderRegisterTable(){
     return;
   }
 
+  // Remember which cell has focus so a background refresh doesn't interrupt typing.
+  let focusMemo = null;
+  const ae = document.activeElement;
+  if(ae && ae.matches && ae.matches(".reg-input") && tbody.contains(ae)){
+    focusMemo = { id: ae.closest("tr").dataset.material, field: ae.dataset.field, pos: ae.selectionStart };
+  }
+
   const groups = materialsByCategory(activeMaterials);
   let html = "";
   let enteredCount = 0;
@@ -1141,7 +1274,8 @@ function renderRegisterTable(){
       const existing = getRegister(m.id, date);
       const draftEntry = draft && draft.entries[m.id];
       const opening = openingForDate(m.id, date);
-      const purchase = draftEntry && draftEntry.purchase !== undefined ? draftEntry.purchase : (existing ? existing.purchase : 0);
+      const eff = effectivePurchaseForDate(m.id, date);   // comes from the Purchases tab, never typed here
+      const purchase = eff.value;
       const wastage = draftEntry && draftEntry.wastage !== undefined ? draftEntry.wastage : (existing ? existing.wastage : 0);
       const closing = draftEntry && draftEntry.closing !== undefined ? draftEntry.closing : (existing ? existing.closing : 0);
       const usage = opening + Number(purchase) - Number(wastage) - Number(closing);
@@ -1153,11 +1287,15 @@ function renderRegisterTable(){
             <div class="mat-name">${isEntered ? '<span class="entered-check" title="Already saved for this day">✓</span>' : ''}${m.name}</div>
             <div class="mat-unit">${m.unit||''}</div>
           </td>
-          <td class="num"><span class="opening-val" data-opening>${opening}</span></td>
-          <td class="num"><input class="reg-input" type="number" step="1" data-field="purchase" value="${purchase}" /></td>
+          <td class="num"><span class="opening-val" data-opening>${opening}</span><div class="bunch-eq">${bunchEquiv(m, opening)}</div></td>
+          <td class="num">
+            <input class="reg-input" type="number" step="1" data-field="purchase" data-from-entries="${eff.fromEntries ? 1 : 0}" value="${purchase}" readonly tabindex="-1" title="Comes from the Purchases tab" />
+            <div class="purchase-src">${eff.count ? eff.count + (eff.count > 1 ? ' purchases' : ' purchase') : ''}</div>
+          </td>
           <td class="num"><input class="reg-input" type="number" step="1" data-field="wastage" value="${wastage}" /></td>
           <td class="num">
             <input class="reg-input" type="number" step="1" data-field="closing" value="${closing}" />
+            <div class="bunch-eq" data-close-eq>${bunchEquiv(m, closing)}</div>
             <div class="odd-warning-note" data-odd-note style="display:none;">Usage would be negative — check this count.</div>
           </td>
           <td class="num"><span class="usage-val ${usage < 0 ? 'negative' : ''}" data-usage>${fmtNum(usage)}</span></td>
@@ -1176,6 +1314,8 @@ function renderRegisterTable(){
     const closingInput = row.querySelector('[data-field="closing"]');
     const oddNote = row.querySelector("[data-odd-note]");
     const opening = Number(openingEl.textContent);
+    const closeEq = row.querySelector("[data-close-eq]");
+    const mat = materials.find(x => x.id === materialId);
     row.querySelectorAll(".reg-input").forEach(input => {
       input.addEventListener("input", () => {
         const p = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
@@ -1186,6 +1326,7 @@ function renderRegisterTable(){
         usageEl.classList.toggle("negative", u < 0);
         closingInput.classList.toggle("odd-warning", u < 0);
         oddNote.style.display = u < 0 ? "block" : "none";
+        closeEq.textContent = bunchEquiv(mat, c);
         updateDraftEntry(date, materialId, input.dataset.field, Math.round(Number(input.value || 0)));
         row.classList.add("edited");
       });
@@ -1193,11 +1334,16 @@ function renderRegisterTable(){
   });
 
   applyRegisterSearch();
+  if(focusMemo){
+    const row = tbody.querySelector(`tr[data-material="${focusMemo.id}"]`);
+    const el = row && row.querySelector(`[data-field="${focusMemo.field}"]`);
+    if(el && !el.readOnly){ el.focus(); try{ el.setSelectionRange(focusMemo.pos, focusMemo.pos); }catch(e){} row.classList.add("active-row"); }
+  }
 
   // Enter/ArrowDown move to the same field in the next row, ArrowUp to the
   // previous row (spreadsheet-style); Left/Right arrows move between
   // columns in the same row.
-  const FIELD_ORDER = ["purchase", "wastage", "closing"];
+  const FIELD_ORDER = ["wastage", "closing"];
   const dataRows = Array.from(tbody.querySelectorAll("tr[data-material]"));
   const focusRow = (targetRow, field) => {
     if(!targetRow) return false;
@@ -1253,22 +1399,7 @@ $("registerTableBody").addEventListener("focusin", (e) => {
 $("registerNote").addEventListener("input", () => {
   updateDraftNote($("registerDate").value || todayISO(), $("registerNote").value);
 });
-$("copyYesterdayBtn").addEventListener("click", () => {
-  const date = $("registerDate").value || todayISO();
-  const yesterday = addDays(date, -1);
-  let copied = 0;
-  document.querySelectorAll("#registerTableBody tr[data-material]").forEach(row => {
-    const materialId = row.dataset.material;
-    const yReg = getRegister(materialId, yesterday);
-    if(yReg && Number(yReg.purchase) > 0){
-      const input = row.querySelector('[data-field="purchase"]');
-      input.value = yReg.purchase;
-      input.dispatchEvent(new Event("input"));
-      copied++;
-    }
-  });
-  showToast(copied > 0 ? `Copied ${copied} purchase quantities from yesterday.` : "Yesterday had no purchases to copy.");
-});
+
 
 let pendingSaves = 0;
 function setSaveStatus(state, detail){
@@ -1287,9 +1418,14 @@ $("saveRegisterBtn").addEventListener("click", async () => {
   const date = $("registerDate").value || todayISO();
   const note = $("registerNote").value.trim();
   const rows = Array.from(document.querySelectorAll("#registerTableBody tr[data-material]"));
+  if(!(materialsLoaded && registersLoaded && purchasesLoaded)){
+    showToast("Still loading your data — try Save Day again in a moment.", true);
+    return;
+  }
   const entries = rows.map(row => ({
     materialId: row.dataset.material,
     purchase: Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0)),
+    purchaseFromEntries: row.querySelector('[data-field="purchase"]').dataset.fromEntries === "1",
     wastage: Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0)),
     closing: Math.round(Number(row.querySelector('[data-field="closing"]').value || 0))
   }));
@@ -1298,12 +1434,13 @@ $("saveRegisterBtn").addEventListener("click", async () => {
   // Show the numbers on screen straight away (optimistic) — but nothing is
   // called "saved" until the cloud confirms, and the local draft is kept
   // until then so a failure or refresh can never lose the entries.
-  entries.forEach(({ materialId, purchase, wastage, closing }) => {
+  entries.forEach(({ materialId, purchase, purchaseFromEntries, wastage, closing }) => {
     let reg = getRegister(materialId, date);
     if(reg){
-      reg.purchase = purchase; reg.wastage = wastage; reg.closing = closing;
+      reg.purchase = purchase; reg._storedPurchase = purchase; reg.purchaseFromEntries = purchaseFromEntries;
+      reg.wastage = wastage; reg.closing = closing;
     }else{
-      registers.push({ id: `local_${materialId}_${date}`, materialId, date, purchase, wastage, closing });
+      registers.push({ id: `local_${materialId}_${date}`, materialId, date, purchase, _storedPurchase: purchase, purchaseFromEntries, wastage, closing });
     }
   });
   dayNotes[date] = note;
@@ -1317,8 +1454,8 @@ $("saveRegisterBtn").addEventListener("click", async () => {
   try{
     // One batched commit = one network round-trip, and all-or-nothing.
     const batch = writeBatch(db);
-    entries.forEach(({ materialId, purchase, wastage, closing }) => {
-      batch.set(doc(db, REGISTERS_COL, `${materialId}_${date}`), { materialId, date, purchase, wastage, closing }, { merge: true });
+    entries.forEach(({ materialId, purchase, purchaseFromEntries, wastage, closing }) => {
+      batch.set(doc(db, REGISTERS_COL, `${materialId}_${date}`), { materialId, date, purchase, purchaseFromEntries, wastage, closing }, { merge: true });
     });
     await batch.commit();
     if(lastDraftEditTs <= clickTs) clearDraftForDate(date); // nothing typed since clicking Save
@@ -1397,12 +1534,12 @@ function renderMaterialsList(){
               ${m.photoUrl ? `<img class="mat-thumb-sm" src="${m.photoUrl}" alt="${m.name}" onerror="this.style.display='none';" />` : ''}
               <div class="mat-row-main">
                 <div class="n">${swatch}${m.name} ${draft ? '<span class="low-badge" style="position:static; display:inline-block; background:var(--charcoal-soft);">Draft</span>' : ''}</div>
-                <div class="m">${m.unit||''} · low-stock alert at ${fmtNum(m.reorderLevel||0)}</div>
+                <div class="m">${m.unit||''}${m.unit==='stems' && m.stemsPerBunch ? ' · ' + m.stemsPerBunch + ' stems/bunch' : ''} · low-stock alert at ${fmtNum(m.reorderLevel||0)}</div>
                 ${oldest ? `<span class="age-badge ${oldest.status}">${batchStatusLabel(oldest.status)}${oldest.ageDays!==null ? ' · '+oldest.ageDays+'d' : ''}</span>` : ''}
               </div>
             </div>
             <div class="mat-row-actions">
-              <div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div>
+              <div><div class="stock-val">${fmtNum(currentStockOf(m.id))} ${m.unit||''}</div><div class="bunch-eq" style="text-align:right;">${bunchEquiv(m, currentStockOf(m.id))}</div></div>
               <div class="status-switch-wrap">
                 <label class="status-switch">
                   <input type="checkbox" data-toggle-status="${m.id}" ${!draft ? "checked" : ""} />
@@ -1462,6 +1599,7 @@ function openMaterialModal(materialId){
     $("matUnit").value = m.unit || "stems";
     $("matColor").value = m.color || "";
     $("matReorderLevel").value = m.reorderLevel ?? 10;
+    $("matSpb").value = m.stemsPerBunch || "";
     $("matInitialStock").value = m.initialStock ?? 0;
     $("matStatus").value = m.status || "active";
     initialStockField.style.display = hasHistory ? "none" : "flex";
@@ -1478,6 +1616,7 @@ function openMaterialModal(materialId){
     $("matReorderLevel").value = 10;
     $("matStatus").value = "active";
     $("matColor").value = "";
+    $("matSpb").value = "";
     initialStockField.style.display = "flex";
     deleteBtn.style.display = "none";
   }
@@ -1513,6 +1652,7 @@ async function saveMaterial(){
   const unit = $("matUnit").value;
   const color = $("matColor").value.trim();
   const reorderLevel = Math.round(parseFloat($("matReorderLevel").value || 0));
+  const stemsPerBunch = Math.max(0, Math.round(parseFloat($("matSpb").value || 0)));
   const initialStockVisible = $("matInitialStockField").style.display !== "none";
   const initialStock = Math.round(parseFloat($("matInitialStock").value || 0));
   const status = $("matStatus").value === "draft" ? "draft" : "active";
@@ -1534,12 +1674,12 @@ async function saveMaterial(){
     if(editingMaterialId){
       const m = materials.find(x => x.id === editingMaterialId);
       if(!m){ showToast("That material no longer exists.", true); closeMaterialModal(); return; }
-      const updates = { name, groupName, category, unit, color, photoUrl, reorderLevel, status };
+      const updates = { name, groupName, category, unit, color, photoUrl, reorderLevel, stemsPerBunch, status };
       if(initialStockVisible){ updates.initialStock = initialStock; }
       await updateDoc(doc(db, MATERIALS_COL, editingMaterialId), updates);
       showToast("Material updated.");
     }else{
-      await addDoc(collection(db, MATERIALS_COL), { name, groupName, category, unit, color, photoUrl, initialStock, reorderLevel, status });
+      await addDoc(collection(db, MATERIALS_COL), { name, groupName, category, unit, color, photoUrl, initialStock, reorderLevel, stemsPerBunch, status });
       showToast("Material added.");
     }
     closeMaterialModal();
@@ -1853,8 +1993,221 @@ $("exportRangeBtn").addEventListener("click", () => {
   showToast(`Exported ${fmtDate(from)} – ${fmtDate(to)}.`);
 });
 
+/* ---------- PURCHASES TAB ---------- */
+function resolveMaterialByName(name){
+  const n = String(name||"").trim().toLowerCase();
+  if(!n) return null;
+  return materials.find(m => m.name.trim().toLowerCase() === n) || null;
+}
+function renderPurchaseOptions(){
+  $("pFlowerList").innerHTML = materials.slice().sort((a,b) => a.name.localeCompare(b.name))
+    .map(m => `<option value="${m.name.replace(/"/g,'&quot;')}"></option>`).join("");
+  const vendors = Array.from(new Set(purchases.map(p => (p.vendor||"").trim()).filter(Boolean))).sort((a,b) => a.localeCompare(b));
+  $("pVendorList").innerHTML = vendors.map(v => `<option value="${v.replace(/"/g,'&quot;')}"></option>`).join("");
+}
+let lastResolvedFlowerId = null;
+function updatePurchaseForm(flowerChanged){
+  const m = resolveMaterialByName($("pFlower").value);
+  const unitSel = $("pUnit");
+  const qty = Math.round(Number($("pQty").value || 0));
+  let note = "";
+  if(!m){
+    $("pSpbField").style.display = "none";
+    unitSel.disabled = false;
+    lastResolvedFlowerId = null;
+    $("pPreview").textContent = $("pFlower").value.trim() ? "Pick a flower from the list." : "";
+    return;
+  }
+  if(flowerChanged && lastResolvedFlowerId !== m.id){
+    lastResolvedFlowerId = m.id;
+    $("pSpb").value = m.stemsPerBunch || "";
+    unitSel.value = m.unit === "bunches" ? "bunches" : (m.stemsPerBunch ? "bunches" : "stems");
+  }
+  if(m.unit === "bunches"){
+    // this flower is counted in bunches itself — nothing to convert
+    unitSel.value = "bunches"; unitSel.disabled = true;
+    $("pSpbField").style.display = "none";
+    $("pPreview").textContent = qty ? `= ${fmtNum(qty)} bunches (${m.name} is tracked in bunches)` : `${m.name} is tracked in bunches.`;
+  }else{
+    unitSel.disabled = false;
+    const inBunches = unitSel.value === "bunches";
+    $("pSpbField").style.display = inBunches ? "" : "none";
+    const spb = Math.round(Number($("pSpb").value || 0));
+    if(inBunches){
+      $("pPreview").innerHTML = qty && spb
+        ? `${fmtNum(qty)} bunches × ${fmtNum(spb)} stems = <strong>${fmtNum(qty*spb)} stems</strong>`
+        : (qty ? "Enter how many stems are in a bunch of this flower." : "");
+    }else{
+      $("pPreview").textContent = qty ? `= ${fmtNum(qty)} stems` : "";
+    }
+  }
+  if((m.status || "active") === "draft"){
+    $("pPreview").innerHTML += `<div style="color:var(--rose-deep); margin-top:4px;">${m.name} is marked Draft — mark it Active in Materials so it shows in the Daily Register.</div>`;
+  }
+}
+["pFlower"].forEach(id => $(id).addEventListener("input", () => updatePurchaseForm(true)));
+["pQty","pSpb"].forEach(id => $(id).addEventListener("input", () => updatePurchaseForm(false)));
+$("pUnit").addEventListener("change", () => updatePurchaseForm(false));
+
+function setPurchaseStatus(state, detail){
+  const el = $("purchaseStatus");
+  if(state === "saving"){ el.style.color = "var(--gold)"; el.textContent = "⏳ Saving…"; }
+  else if(state === "saved"){ el.style.color = "var(--forest)"; el.textContent = "✓ Saved to cloud"; setTimeout(() => { if(el.textContent.startsWith("✓")) el.textContent = ""; }, 4000); }
+  else if(state === "error"){ el.style.color = "var(--danger)"; el.textContent = `⚠ NOT saved${detail ? ` (${detail})` : ""} — please add it again.`; }
+  else el.textContent = "";
+}
+function resetPurchaseForm(keepDateAndVendor){
+  editingPurchaseId = null;
+  $("purchaseFormTitle").textContent = "Add a purchase";
+  $("pSubmitBtn").textContent = "Add purchase";
+  $("pCancelEditBtn").style.display = "none";
+  $("pFlower").value = ""; $("pQty").value = ""; $("pSpb").value = ""; $("pCost").value = ""; $("pNote").value = "";
+  if(!keepDateAndVendor){ $("pDate").value = todayISO(); $("pVendor").value = ""; }
+  $("pUnit").value = "bunches"; $("pUnit").disabled = false;
+  lastResolvedFlowerId = null;
+  updatePurchaseForm(false);
+}
+$("pCancelEditBtn").addEventListener("click", () => resetPurchaseForm(false));
+
+$("purchaseForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const m = resolveMaterialByName($("pFlower").value);
+  if(!m){ showToast("Pick a flower from the list.", true); return; }
+  const date = $("pDate").value;
+  const qty = Math.round(Number($("pQty").value || 0));
+  if(!date || !(qty > 0)){ showToast("Enter a date and a quantity.", true); return; }
+
+  let unit = $("pUnit").value;
+  let spb = Math.round(Number($("pSpb").value || 0));
+  let baseQty;
+  if(m.unit === "bunches"){ unit = "bunches"; spb = 0; baseQty = qty; }
+  else if(unit === "bunches"){
+    if(!(spb > 0)){ showToast("Enter how many stems are in a bunch.", true); $("pSpb").focus(); return; }
+    baseQty = qty * spb;
+  }else{ spb = 0; baseQty = qty; }
+
+  const vendor = $("pVendor").value.trim();
+  const costRaw = $("pCost").value;
+  const data = {
+    date, materialId: m.id, materialName: m.name,
+    enteredQty: qty, enteredUnit: unit, stemsPerBunch: spb,
+    baseQty, baseUnit: m.unit || "stems",
+    vendor, cost: costRaw === "" ? null : Math.round(Number(costRaw)), note: $("pNote").value.trim()
+  };
+  const wasEditing = editingPurchaseId;
+  let op;
+  if(wasEditing){
+    data.editedBy = currentUser ? currentUser.email : "";
+    op = updateDoc(doc(db, PURCHASES_COL, wasEditing), data);
+  }else{
+    data.createdBy = currentUser ? currentUser.email : "";
+    data.createdAtMs = Date.now();
+    op = addDoc(collection(db, PURCHASES_COL), data);
+  }
+  // remember a new/changed bunch size on the flower itself
+  if(m.unit === "stems" && unit === "bunches" && spb > 0 && spb !== Number(m.stemsPerBunch || 0)){
+    updateDoc(doc(db, MATERIALS_COL, m.id), { stemsPerBunch: spb }).catch(err => console.error(err));
+  }
+
+  pendingSaves++;
+  setPurchaseStatus("saving");
+  op.then(() => { setPurchaseStatus("saved"); })
+    .catch(err => {
+      console.error("Failed to save purchase:", err);
+      setPurchaseStatus("error", err.code || err.message);
+      showToast("Purchase NOT saved — see the red message.", true);
+    })
+    .finally(() => { pendingSaves--; });
+
+  // ready for the next line straight away — date and vendor stay put
+  resetPurchaseForm(true);
+  $("pFlower").focus();
+});
+
+function startEditPurchase(id){
+  const p = purchases.find(x => x.id === id);
+  if(!p) return;
+  editingPurchaseId = id;
+  $("purchaseFormTitle").textContent = "Edit purchase";
+  $("pSubmitBtn").textContent = "Update purchase";
+  $("pCancelEditBtn").style.display = "";
+  $("pDate").value = p.date;
+  $("pFlower").value = p.materialName || (materials.find(m => m.id === p.materialId)?.name || "");
+  $("pQty").value = p.enteredQty;
+  lastResolvedFlowerId = p.materialId;
+  $("pUnit").value = p.enteredUnit || "stems";
+  $("pSpb").value = p.stemsPerBunch || "";
+  $("pVendor").value = p.vendor || "";
+  $("pCost").value = p.cost ?? "";
+  $("pNote").value = p.note || "";
+  updatePurchaseForm(false);
+  $("purchaseForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function deletePurchase(id){
+  const p = purchases.find(x => x.id === id);
+  if(!p) return;
+  if(!confirm(`Delete this purchase of ${p.enteredQty} ${p.enteredUnit} ${p.materialName}?`)) return;
+  pendingSaves++;
+  deleteDoc(doc(db, PURCHASES_COL, id))
+    .then(() => showToast("Purchase deleted."))
+    .catch(err => { console.error(err); showToast(`Couldn't delete (${err.code || "error"}).`, true); })
+    .finally(() => { pendingSaves--; });
+}
+
+function filteredPurchases(){
+  const from = $("pFilterFrom").value, to = $("pFilterTo").value;
+  const term = ($("pFilterSearch").value || "").trim().toLowerCase();
+  return purchases.filter(p => {
+    if(from && p.date < from) return false;
+    if(to && p.date > to) return false;
+    if(term && !`${p.materialName||""} ${p.vendor||""}`.toLowerCase().includes(term)) return false;
+    return true;
+  }).sort((a,b) => a.date === b.date ? (b.createdAtMs||0) - (a.createdAtMs||0) : (a.date < b.date ? 1 : -1));
+}
+function enteredLabel(p){
+  return p.enteredUnit === "bunches" && p.stemsPerBunch
+    ? `${fmtNum(p.enteredQty)} bunches × ${fmtNum(p.stemsPerBunch)}`
+    : `${fmtNum(p.enteredQty)} ${p.enteredUnit || ""}`;
+}
+function renderPurchases(){
+  renderPurchaseOptions();
+  const rows = filteredPurchases();
+  $("purchaseEmpty").style.display = rows.length ? "none" : "block";
+  const totalCost = rows.reduce((sum,p) => sum + Number(p.cost||0), 0);
+  $("pSummary").textContent = rows.length
+    ? `${rows.length} purchase${rows.length>1?'s':''}${totalCost ? ` · ₹${fmtNum(totalCost)} total cost` : ""}`
+    : "";
+  $("purchaseTableBody").innerHTML = rows.map(p => `
+    <tr>
+      <td>${fmtDate(p.date)}</td>
+      <td>${p.materialName || "(deleted)"}</td>
+      <td>${enteredLabel(p)}</td>
+      <td class="num"><strong>${fmtNum(p.baseQty)}</strong> ${p.baseUnit || ""}</td>
+      <td>${p.vendor || "—"}</td>
+      <td class="num">${p.cost != null ? "₹" + fmtNum(p.cost) : "—"}</td>
+      <td>${p.note || "—"}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-danger-text" style="color:var(--forest-deep);" data-p-edit="${p.id}">Edit</button>
+        <button class="btn-danger-text" data-p-del="${p.id}">Delete</button>
+      </td>
+    </tr>`).join("");
+  $("purchaseTableBody").querySelectorAll("[data-p-edit]").forEach(b => b.addEventListener("click", () => startEditPurchase(b.dataset.pEdit)));
+  $("purchaseTableBody").querySelectorAll("[data-p-del]").forEach(b => b.addEventListener("click", () => deletePurchase(b.dataset.pDel)));
+}
+["pFilterFrom","pFilterTo"].forEach(id => $(id).addEventListener("change", renderPurchases));
+$("pFilterSearch").addEventListener("input", renderPurchases);
+$("pExportBtn").addEventListener("click", () => {
+  const rows = filteredPurchases().slice().reverse();
+  if(rows.length === 0){ showToast("No purchases to export for these filters.", true); return; }
+  const out = [["Date","Flower","Entered Qty","Entered Unit","Stems per Bunch","Total","Total Unit","Vendor","Cost (₹)","Note","Entered By"]];
+  rows.forEach(p => out.push([fmtDate(p.date), p.materialName || "", p.enteredQty, p.enteredUnit || "", p.stemsPerBunch || "", p.baseQty, p.baseUnit || "", p.vendor || "", p.cost ?? "", p.note || "", p.createdBy || ""]));
+  downloadCsv(`hanabee-purchases-${todayISO()}.csv`, out);
+  showToast("Purchases exported.");
+});
+
 /* ---------- INIT ---------- */
 function renderAll(){
+  renderPurchases();
   renderFilterOptions();
   renderDashboard();
   renderByColorView();
