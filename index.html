@@ -126,7 +126,7 @@
 
   /* Daily register table */
   .register-table-wrap{ overflow-x:auto; }
-  table.register{ width:100%; border-collapse:collapse; min-width:760px; }
+  table.register{ width:100%; border-collapse:collapse; min-width:860px; }
   table.register th{
     text-align:left; font-size:0.7rem; letter-spacing:0.8px; text-transform:uppercase; color:var(--charcoal-soft);
     padding:10px 10px; border-bottom:1px solid var(--line); background:var(--cream-deep);
@@ -157,6 +157,9 @@
   table.register tr.hidden-by-search{ display:none; }
   table.register input.reg-input[readonly]{ background:var(--sage); border-color:transparent; color:var(--forest-deep); font-weight:500; cursor:default; }
   .bunch-eq{ font-size:0.68rem; color:var(--charcoal-soft); margin-top:3px; min-height:0.9em; }
+  .tag.return{ background:#E6ECF2; color:#3F5368; }
+  .type-pill[data-ptype="return"].active{ background:var(--rose-deep); border-color:var(--rose-deep); }
+  .chart-bar.returned{ background:#7C8DA0; }
   .purchase-src{ font-size:0.65rem; color:var(--charcoal-soft); margin-top:3px; }
   table.register tr.edited td{ background:#FFFAEB; }
   table.register tr.active-row td{ background:#EAF2E8; }
@@ -298,7 +301,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-view="dashboard">Dashboard</button>
   <button class="tab-btn" data-view="bycolor">By Colour</button>
-  <button class="tab-btn" data-view="purchases">Purchases</button>
+  <button class="tab-btn" data-view="purchases">Purchases &amp; Returns</button>
   <button class="tab-btn" data-view="register">Daily Register</button>
   <button class="tab-btn" data-view="materials">Materials</button>
   <button class="tab-btn" data-view="history">History</button>
@@ -336,10 +339,14 @@
 
   <!-- ---------- PURCHASES ---------- -->
   <section class="view" id="view-purchases">
-    <div class="view-header"><div class="view-title">Purchases</div></div>
+    <div class="view-header"><div class="view-title">Purchases &amp; Returns</div></div>
 
     <div class="card" style="margin-bottom:18px;">
       <p class="section-label" id="purchaseFormTitle">Add a purchase</p>
+      <div class="entry-type-toggle" id="pTypeToggle" style="margin-bottom:14px;">
+        <button type="button" class="type-pill active" data-ptype="purchase">Purchase</button>
+        <button type="button" class="type-pill" data-ptype="return">Return to vendor</button>
+      </div>
       <form id="purchaseForm" autocomplete="off">
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:14px;">
           <div class="field"><label>Date</label><input type="date" id="pDate" required /></div>
@@ -352,11 +359,11 @@
             <select id="pUnit"><option value="bunches">Bunches</option><option value="stems">Stems</option></select>
           </div>
           <div class="field" id="pSpbField"><label>Stems per bunch</label><input type="number" id="pSpb" min="1" step="1" placeholder="e.g. 10" /></div>
-          <div class="field"><label>Vendor (optional)</label>
+          <div class="field"><label id="pVendorLabel">Vendor (optional)</label>
             <input type="text" id="pVendor" list="pVendorList" placeholder="e.g. LR Farms" />
             <datalist id="pVendorList"></datalist>
           </div>
-          <div class="field"><label>Total cost ₹ (optional)</label><input type="number" id="pCost" min="0" step="1" /></div>
+          <div class="field"><label id="pCostLabel">Total cost ₹ (optional)</label><input type="number" id="pCost" min="0" step="1" /></div>
           <div class="field"><label>Note (optional)</label><input type="text" id="pNote" /></div>
         </div>
         <div id="pPreview" style="margin-top:12px; font-size:0.88rem; color:var(--forest-deep); min-height:1.2em;"></div>
@@ -365,7 +372,7 @@
           <button type="button" class="btn btn-outline" id="pCancelEditBtn" style="display:none;">Cancel edit</button>
           <span id="purchaseStatus" style="font-size:0.8rem; font-weight:500;"></span>
         </div>
-        <p class="locked-note" style="margin-top:10px;">Purchases entered here flow into the Daily Register's Purchase column automatically — stock updates once you enter that day's closing count.</p>
+        <p class="locked-note" style="margin-top:10px;">Purchases and returns entered here flow into the Daily Register automatically — stock updates once you enter that day's closing count. Returned flowers are not counted as usage or wastage.</p>
       </form>
     </div>
 
@@ -377,13 +384,14 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input type="text" id="pFilterSearch" placeholder="Search flower or vendor…" />
         </div>
+        <select id="pFilterType"><option value="">Purchases &amp; returns</option><option value="purchase">Purchases only</option><option value="return">Returns only</option></select>
         <button class="btn btn-outline" id="pExportBtn">⬇ Export CSV</button>
       </div>
       <p id="pSummary" style="font-size:0.8rem; color:var(--charcoal-soft); margin-bottom:10px;"></p>
       <div style="overflow-x:auto;">
         <table class="history">
           <thead><tr>
-            <th>Date</th><th>Flower</th><th>Bought</th><th class="num">Total</th><th>Vendor</th><th class="num">Cost</th><th>Note</th><th></th>
+            <th>Date</th><th>Type</th><th>Flower</th><th>Qty</th><th class="num">Total</th><th>Vendor</th><th class="num">Cost</th><th>Note</th><th></th>
           </tr></thead>
           <tbody id="purchaseTableBody"></tbody>
         </table>
@@ -428,7 +436,8 @@
             <tr>
               <th>Material</th>
               <th class="num">Opening</th>
-              <th class="num">Purchase (from Purchases tab)</th>
+              <th class="num">Purchase</th>
+              <th class="num">Returned to vendor</th>
               <th class="num">Wastage</th>
               <th class="num">Closing (physical count)</th>
               <th class="num">Usage (auto)</th>
@@ -440,7 +449,7 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="saveRegisterBtn">Save Day</button>
         <span id="saveStatus" style="font-size:0.8rem; font-weight:500;"></span>
-        <span class="locked-note">Usage = Opening + Purchase − Wastage − Closing. Enter today's actual physical count as Closing and usage is worked out for you.</span>
+        <span class="locked-note">Usage = Opening + Purchase − Returned − Wastage − Closing. Enter today's actual physical count as Closing and usage is worked out for you.</span>
       </div>
     </div>
   </section>
@@ -479,7 +488,7 @@
 
     <div class="card" style="margin-bottom:18px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
-        <p class="section-label" style="margin:0;">Trend — Purchase / Usage / Wastage</p>
+        <p class="section-label" style="margin:0;">Trend — Purchase / Returned / Usage / Wastage</p>
         <div class="entry-type-toggle" id="analyticsGranularityToggle">
           <button class="type-pill" data-granularity="daily">Daily</button>
           <button class="type-pill active" data-granularity="weekly">Weekly</button>
@@ -492,6 +501,7 @@
       </div>
       <div style="display:flex; gap:16px; margin-top:10px; font-size:0.75rem; color:var(--charcoal-soft);">
         <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--forest); margin-right:5px;"></span>Purchase</span>
+        <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:#7C8DA0; margin-right:5px;"></span>Returned</span>
         <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--gold); margin-right:5px;"></span>Usage</span>
         <span><span style="display:inline-block; width:9px; height:9px; border-radius:2px; background:var(--rose-deep); margin-right:5px;"></span>Wastage</span>
       </div>
@@ -510,7 +520,7 @@
           <thead>
             <tr>
               <th>Date</th><th>Material</th><th>Category</th>
-              <th class="num">Opening</th><th class="num">Purchase</th>
+              <th class="num">Opening</th><th class="num">Purchase</th><th class="num">Returned</th>
               <th class="num">Wastage</th><th class="num">Closing</th><th class="num">Usage</th>
             </tr>
           </thead>
@@ -677,7 +687,7 @@ let dayNotes = {}; // { [date]: note string }
      opening  = previous day's closing (chained), or material's
                 initialStock if this is the first recorded day
      closing  = the ACTUAL physical stock count you enter (ground truth)
-     usage    = opening + purchase − wastage − closing   (derived)
+     usage    = opening + purchase − returned − wastage − closing   (derived)
 
    opening/usage are computed client-side every time data loads —
    only purchase/wastage/closing are ever written to Firestore.
@@ -801,14 +811,18 @@ function getRegister(materialId, date){
 // Recompute opening/usage for every register of a material, in date order.
 // Closing is treated as ground truth (the physical count entered that day);
 // usage is back-calculated from it.
+let returnsByMaterial = {};   // { materialId: [return entries sorted by date] }
 function rebuildPurchaseIndex(){
   purchasesByMaterial = {};
+  returnsByMaterial = {};
   purchases.forEach(p => {
-    if(!purchasesByMaterial[p.materialId]) purchasesByMaterial[p.materialId] = [];
-    purchasesByMaterial[p.materialId].push(p);
+    const target = p.type === "return" ? returnsByMaterial : purchasesByMaterial;
+    if(!target[p.materialId]) target[p.materialId] = [];
+    target[p.materialId].push(p);
   });
-  Object.values(purchasesByMaterial).forEach(list => list.sort((a,b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAtMs||0) - (b.createdAtMs||0)));
+  const byDate = (x,y) => x.date < y.date ? -1 : x.date > y.date ? 1 : (x.createdAtMs||0) - (y.createdAtMs||0);
+  Object.values(purchasesByMaterial).forEach(list => list.sort(byDate));
+  Object.values(returnsByMaterial).forEach(list => list.sort(byDate));
 }
 // A register's Purchase is the total of purchase entries made since the previous
 // counted day (up to and including this day). Days saved before the Purchases tab
@@ -817,19 +831,25 @@ function recalcMaterial(materialId){
   const material = materials.find(m => m.id === materialId);
   const chain = getRegistersForMaterial(materialId);
   const plist = purchasesByMaterial[materialId] || [];
-  let pi = 0;
+  const rlist = returnsByMaterial[materialId] || [];
+  let pi = 0, ri = 0;
   let running = material ? Number(material.initialStock||0) : 0;
   chain.forEach(r => {
     if(r._storedPurchase === undefined) r._storedPurchase = Math.round(Number(r.purchase||0));
     const entries = [];
     while(pi < plist.length && plist[pi].date <= r.date){ entries.push(plist[pi]); pi++; }
+    const rets = [];
+    while(ri < rlist.length && rlist[ri].date <= r.date){ rets.push(rlist[ri]); ri++; }
     r._entries = entries;
+    r._returns = rets;
     r.opening = Math.round(running);
     if(entries.length) r.purchase = Math.round(entries.reduce((sum,e) => sum + Number(e.baseQty||0), 0));
     else r.purchase = r.purchaseFromEntries ? 0 : r._storedPurchase;
+    r.returned = Math.round(rets.reduce((sum,e) => sum + Number(e.baseQty||0), 0));
     r.wastage = Math.round(Number(r.wastage||0));
     r.closing = Math.round(Number(r.closing||0));
-    r.usage = r.opening + r.purchase - r.wastage - r.closing;
+    // flowers sent back to the vendor are neither used nor wasted
+    r.usage = r.opening + r.purchase - r.returned - r.wastage - r.closing;
     running = r.closing;
   });
 }
@@ -844,6 +864,17 @@ function effectivePurchaseForDate(materialId, date){
     if(p.date <= date && (!prev || p.date > prev)){ sum += Number(p.baseQty||0); count++; }
   });
   return { value: Math.round(sum), fromEntries: count > 0, count };
+}
+function effectiveReturnedForDate(materialId, date){
+  const existing = getRegister(materialId, date);
+  if(existing) return { value: existing.returned || 0, count: (existing._returns||[]).length };
+  let prev = null;
+  for(const r of getRegistersForMaterial(materialId)){ if(r.date < date) prev = r.date; else break; }
+  let sum = 0, count = 0;
+  (returnsByMaterial[materialId] || []).forEach(p => {
+    if(p.date <= date && (!prev || p.date > prev)){ sum += Number(p.baseQty||0); count++; }
+  });
+  return { value: Math.round(sum), count };
 }
 // "6 bunches + 3 stems" — only for flowers counted in stems with a known bunch size.
 function bunchEquiv(m, stock){
@@ -919,7 +950,13 @@ function getBatchesForMaterial(materialId){
     }else if(Number(r.purchase) > 0){
       batches.push({ date: r.date, qty: Number(r.purchase) });
     }
-    let outflow = Math.max(0, Number(r.opening||0) + Number(r.purchase||0) - Number(r.closing||0));
+    // Returned flowers are the freshest stock going back to the vendor, so they leave the newest batches first.
+    let ret = Number(r.returned||0);
+    for(let i = batches.length - 1; i >= 0 && ret > 0.0001; i--){
+      const take = Math.min(batches[i].qty, ret);
+      batches[i].qty -= take; ret -= take;
+    }
+    let outflow = Math.max(0, Number(r.opening||0) + Number(r.purchase||0) - Number(r.returned||0) - Number(r.closing||0));
     let i = 0;
     while(outflow > 0.0001 && i < batches.length){
       const take = Math.min(batches[i].qty, outflow);
@@ -1249,7 +1286,7 @@ function renderRegisterTable(){
   $("registerNote").value = (draft && draft.note) || dayNotes[date] || "";
 
   if(activeMaterials.length === 0){
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No active materials to log. Add one, or mark a draft material active, under the Materials tab.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">No active materials to log. Add one, or mark a draft material active, under the Materials tab.</div></td></tr>`;
     $("registerProgress").textContent = "";
     return;
   }
@@ -1265,7 +1302,7 @@ function renderRegisterTable(){
   let html = "";
   let enteredCount = 0;
   CATEGORIES.filter(c => groups[c].length > 0).forEach(cat => {
-    html += `<tr class="cat-row"><td colspan="6">${cat}</td></tr>`;
+    html += `<tr class="cat-row"><td colspan="7">${cat}</td></tr>`;
     const sorted = groups[cat].slice().sort((a,b) => {
       const cmp = a.name.localeCompare(b.name);
       return registerSortDir === "desc" ? -cmp : cmp;
@@ -1276,9 +1313,11 @@ function renderRegisterTable(){
       const opening = openingForDate(m.id, date);
       const eff = effectivePurchaseForDate(m.id, date);   // comes from the Purchases tab, never typed here
       const purchase = eff.value;
+      const retInfo = effectiveReturnedForDate(m.id, date);
+      const returned = retInfo.value;
       const wastage = draftEntry && draftEntry.wastage !== undefined ? draftEntry.wastage : (existing ? existing.wastage : 0);
       const closing = draftEntry && draftEntry.closing !== undefined ? draftEntry.closing : (existing ? existing.closing : 0);
-      const usage = opening + Number(purchase) - Number(wastage) - Number(closing);
+      const usage = opening + Number(purchase) - Number(returned) - Number(wastage) - Number(closing);
       const isEntered = !!existing;
       if(isEntered) enteredCount++;
       html += `
@@ -1291,6 +1330,10 @@ function renderRegisterTable(){
           <td class="num">
             <input class="reg-input" type="number" step="1" data-field="purchase" data-from-entries="${eff.fromEntries ? 1 : 0}" value="${purchase}" readonly tabindex="-1" title="Comes from the Purchases tab" />
             <div class="purchase-src">${eff.count ? eff.count + (eff.count > 1 ? ' purchases' : ' purchase') : ''}</div>
+          </td>
+          <td class="num">
+            <input class="reg-input" type="number" step="1" data-field="returned" value="${returned}" readonly tabindex="-1" title="Comes from the Purchases & Returns tab" />
+            <div class="purchase-src">${retInfo.count ? retInfo.count + (retInfo.count > 1 ? ' returns' : ' return') : ''}</div>
           </td>
           <td class="num"><input class="reg-input" type="number" step="1" data-field="wastage" value="${wastage}" /></td>
           <td class="num">
@@ -1319,9 +1362,10 @@ function renderRegisterTable(){
     row.querySelectorAll(".reg-input").forEach(input => {
       input.addEventListener("input", () => {
         const p = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
+        const rt = Math.round(Number(row.querySelector('[data-field="returned"]').value || 0));
         const w = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
         const c = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
-        const u = opening + p - w - c;
+        const u = opening + p - rt - w - c;
         usageEl.textContent = fmtNum(u);
         usageEl.classList.toggle("negative", u < 0);
         closingInput.classList.toggle("odd-warning", u < 0);
@@ -1772,8 +1816,9 @@ function renderAnalytics(rows){
   const buckets = {};
   rows.forEach(r => {
     const key = bucketKeyOf(r.date, granularity);
-    if(!buckets[key]) buckets[key] = { purchase:0, usage:0, wastage:0 };
+    if(!buckets[key]) buckets[key] = { purchase:0, returned:0, usage:0, wastage:0 };
     buckets[key].purchase += Number(r.purchase||0);
+    buckets[key].returned += Number(r.returned||0);
     buckets[key].usage += Number(r.usage||0);
     buckets[key].wastage += Number(r.wastage||0);
   });
@@ -1782,15 +1827,17 @@ function renderAnalytics(rows){
   // Summary stats across the whole filtered range (not just the visible buckets)
   const totals = rows.reduce((acc, r) => {
     acc.purchase += Number(r.purchase||0);
+    acc.returned += Number(r.returned||0);
     acc.usage += Number(r.usage||0);
     acc.wastage += Number(r.wastage||0);
     return acc;
-  }, { purchase:0, usage:0, wastage:0 });
+  }, { purchase:0, returned:0, usage:0, wastage:0 });
   const outflow = totals.usage + totals.wastage;
   const wastagePct = outflow > 0 ? Math.round((totals.wastage / outflow) * 100) : 0;
 
   $("analyticsStats").innerHTML = `
     <div class="stat-card"><div class="num">${fmtNum(totals.purchase)}</div><div class="label">Total purchased</div></div>
+    <div class="stat-card"><div class="num">${fmtNum(totals.returned)}</div><div class="label">Returned to vendor</div></div>
     <div class="stat-card"><div class="num">${fmtNum(totals.usage)}</div><div class="label">Total used</div></div>
     <div class="stat-card warn"><div class="num">${fmtNum(totals.wastage)}</div><div class="label">Total wasted</div></div>
     <div class="stat-card ${wastagePct >= 15 ? 'warn' : ''}"><div class="num">${wastagePct}%</div><div class="label">Wastage rate</div></div>
@@ -1801,14 +1848,15 @@ function renderAnalytics(rows){
     chartEl.innerHTML = `<div class="empty-state">No data yet for this range.</div>`;
     return;
   }
-  const maxVal = Math.max(1, ...keys.map(k => Math.max(buckets[k].purchase, buckets[k].usage, buckets[k].wastage)));
+  const maxVal = Math.max(1, ...keys.map(k => Math.max(buckets[k].purchase, buckets[k].returned, buckets[k].usage, buckets[k].wastage)));
   chartEl.innerHTML = `<div class="chart-wrap">${keys.map(key => {
     const b = buckets[key];
     const h = v => Math.max(2, Math.round((v / maxVal) * 140));
     return `
-      <div class="chart-bucket" title="${bucketLabelOf(key, granularity)} — Purchase ${fmtNum(b.purchase)}, Usage ${fmtNum(b.usage)}, Wastage ${fmtNum(b.wastage)}">
+      <div class="chart-bucket" title="${bucketLabelOf(key, granularity)} — Purchase ${fmtNum(b.purchase)}, Returned ${fmtNum(b.returned)}, Usage ${fmtNum(b.usage)}, Wastage ${fmtNum(b.wastage)}">
         <div class="chart-bars">
           <div class="chart-bar purchase" style="height:${h(b.purchase)}px;"></div>
+          <div class="chart-bar returned" style="height:${h(b.returned)}px;"></div>
           <div class="chart-bar usage" style="height:${h(b.usage)}px;"></div>
           <div class="chart-bar wastage" style="height:${h(b.wastage)}px;"></div>
         </div>
@@ -1841,16 +1889,17 @@ function renderHistory(){
   if(historyViewMode === "byday"){
     theadRow.innerHTML = `
       <th>Date</th><th class="num">Materials logged</th>
-      <th class="num">Opening (total)</th><th class="num">Purchase</th>
+      <th class="num">Opening (total)</th><th class="num">Purchase</th><th class="num">Returned</th>
       <th class="num">Wastage</th><th class="num">Closing (total)</th><th class="num">Usage</th>`;
 
     const byDate = {};
     rows.forEach(r => {
-      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, wastage:0, closing:0, usage:0 };
+      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, returned:0, wastage:0, closing:0, usage:0 };
       const d = byDate[r.date];
       d.count += 1;
       d.opening += Number(r.opening||0);
       d.purchase += Number(r.purchase||0);
+      d.returned += Number(r.returned||0);
       d.wastage += Number(r.wastage||0);
       d.closing += Number(r.closing||0);
       d.usage += Number(r.usage||0);
@@ -1865,6 +1914,7 @@ function renderHistory(){
           <td class="num">${d.count}</td>
           <td class="num">${fmtNum(d.opening)}</td>
           <td class="num">${fmtNum(d.purchase)}</td>
+          <td class="num">${fmtNum(d.returned)}</td>
           <td class="num">${fmtNum(d.wastage)}</td>
           <td class="num">${fmtNum(d.closing)}</td>
           <td class="num">${fmtNum(d.usage)}</td>
@@ -1875,7 +1925,7 @@ function renderHistory(){
 
   theadRow.innerHTML = `
     <th>Date</th><th>Material</th><th>Category</th>
-    <th class="num">Opening</th><th class="num">Purchase</th>
+    <th class="num">Opening</th><th class="num">Purchase</th><th class="num">Returned</th>
     <th class="num">Wastage</th><th class="num">Closing</th><th class="num">Usage</th>`;
 
   $("historyTableBody").innerHTML = rows.map(r => {
@@ -1887,6 +1937,7 @@ function renderHistory(){
         <td>${m ? m.category : ''}</td>
         <td class="num">${fmtNum(r.opening)}</td>
         <td class="num">${fmtNum(r.purchase)}</td>
+        <td class="num">${fmtNum(r.returned)}</td>
         <td class="num">${fmtNum(r.wastage)}</td>
         <td class="num">${fmtNum(r.closing)}</td>
         <td class="num">${fmtNum(r.usage)}</td>
@@ -1918,27 +1969,28 @@ $("exportCsvBtn").addEventListener("click", () => {
   if(historyViewMode === "byday"){
     const byDate = {};
     lastHistoryRows.forEach(r => {
-      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, wastage:0, closing:0, usage:0 };
+      if(!byDate[r.date]) byDate[r.date] = { count:0, opening:0, purchase:0, returned:0, wastage:0, closing:0, usage:0 };
       const d = byDate[r.date];
       d.count += 1;
       d.opening += Number(r.opening||0);
       d.purchase += Number(r.purchase||0);
+      d.returned += Number(r.returned||0);
       d.wastage += Number(r.wastage||0);
       d.closing += Number(r.closing||0);
       d.usage += Number(r.usage||0);
     });
     const dates = Object.keys(byDate).sort();
-    const out = [["Date","Materials Logged","Opening (total)","Purchase","Wastage","Closing (total)","Usage"]];
+    const out = [["Date","Materials Logged","Opening (total)","Purchase","Returned","Wastage","Closing (total)","Usage"]];
     dates.forEach(date => {
       const d = byDate[date];
-      out.push([fmtDate(date), d.count, d.opening, d.purchase, d.wastage, d.closing, d.usage]);
+      out.push([fmtDate(date), d.count, d.opening, d.purchase, d.returned, d.wastage, d.closing, d.usage]);
     });
     downloadCsv(`hanabee-ledger-byday-${today}.csv`, out);
   }else{
-    const out = [["Date","Material","Category","Opening","Purchase","Wastage","Closing","Usage"]];
+    const out = [["Date","Material","Category","Opening","Purchase","Returned","Wastage","Closing","Usage"]];
     lastHistoryRows.forEach(r => {
       const m = materials.find(x => x.id === r.materialId);
-      out.push([fmtDate(r.date), m ? m.name : "(deleted)", m ? m.category : "", r.opening, r.purchase, r.wastage, r.closing, r.usage]);
+      out.push([fmtDate(r.date), m ? m.name : "(deleted)", m ? m.category : "", r.opening, r.purchase, r.returned || 0, r.wastage, r.closing, r.usage]);
     });
     downloadCsv(`hanabee-ledger-detailed-${today}.csv`, out);
   }
@@ -1946,7 +1998,7 @@ $("exportCsvBtn").addEventListener("click", () => {
 });
 
 /* ---------- DAILY REGISTER EXPORT ---------- */
-const REGISTER_CSV_HEADER = ["Date","Material","Variant Group","Category","Colour","Unit","Opening","Purchase","Wastage","Closing","Usage","Saved","Day Note"];
+const REGISTER_CSV_HEADER = ["Date","Material","Variant Group","Category","Colour","Unit","Opening","Purchase","Returned","Wastage","Closing","Usage","Saved","Day Note"];
 
 // One day: exports what's on screen for that date (every active material,
 // including ones not yet saved), so it matches what the person is looking at.
@@ -1961,11 +2013,12 @@ $("exportDayBtn").addEventListener("click", () => {
     if(!m) return;
     const opening = Number(row.querySelector("[data-opening]").textContent);
     const purchase = Math.round(Number(row.querySelector('[data-field="purchase"]').value || 0));
+    const returned = Math.round(Number(row.querySelector('[data-field="returned"]').value || 0));
     const wastage = Math.round(Number(row.querySelector('[data-field="wastage"]').value || 0));
     const closing = Math.round(Number(row.querySelector('[data-field="closing"]').value || 0));
-    const usage = opening + purchase - wastage - closing;
+    const usage = opening + purchase - returned - wastage - closing;
     out.push([fmtDate(date), m.name, m.groupName || "", m.category || "", m.color || "", m.unit || "",
-      opening, purchase, wastage, closing, usage, getRegister(m.id, date) ? "Yes" : "No", note]);
+      opening, purchase, returned, wastage, closing, usage, getRegister(m.id, date) ? "Yes" : "No", note]);
   });
   out.sort((a,b) => a === REGISTER_CSV_HEADER ? -1 : b === REGISTER_CSV_HEADER ? 1 : String(a[1]).localeCompare(String(b[1])));
   downloadCsv(`hanabee-register-${date}.csv`, out);
@@ -1987,7 +2040,7 @@ $("exportRangeBtn").addEventListener("click", () => {
   inRange.forEach(r => {
     const m = materials.find(x => x.id === r.materialId);
     out.push([fmtDate(r.date), m ? m.name : "(deleted)", m?.groupName || "", m?.category || "", m?.color || "", m?.unit || "",
-      r.opening, r.purchase, r.wastage, r.closing, r.usage, "Yes", dayNotes[r.date] || ""]);
+      r.opening, r.purchase, r.returned || 0, r.wastage, r.closing, r.usage, "Yes", dayNotes[r.date] || ""]);
   });
   downloadCsv(`hanabee-register-${from}_to_${to}.csv`, out);
   showToast(`Exported ${fmtDate(from)} – ${fmtDate(to)}.`);
@@ -2005,6 +2058,24 @@ function renderPurchaseOptions(){
   const vendors = Array.from(new Set(purchases.map(p => (p.vendor||"").trim()).filter(Boolean))).sort((a,b) => a.localeCompare(b));
   $("pVendorList").innerHTML = vendors.map(v => `<option value="${v.replace(/"/g,'&quot;')}"></option>`).join("");
 }
+let purchaseType = "purchase";   // "purchase" | "return"
+function applyPurchaseTypeUI(){
+  const isReturn = purchaseType === "return";
+  document.querySelectorAll("#pTypeToggle .type-pill").forEach(b => b.classList.toggle("active", b.dataset.ptype === purchaseType));
+  $("purchaseFormTitle").textContent = (editingPurchaseId ? "Edit " : "") + (isReturn ? "return to vendor" : "purchase");
+  if(!editingPurchaseId) $("purchaseFormTitle").textContent = isReturn ? "Return flowers to vendor" : "Add a purchase";
+  $("pSubmitBtn").textContent = editingPurchaseId ? (isReturn ? "Update return" : "Update purchase") : (isReturn ? "Record return" : "Add purchase");
+  $("pVendorLabel").textContent = isReturn ? "Returned to (optional)" : "Vendor (optional)";
+  $("pCostLabel").textContent = isReturn ? "Credit received ₹ (optional)" : "Total cost ₹ (optional)";
+}
+document.querySelectorAll("#pTypeToggle .type-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    if(editingPurchaseId) return; // switching type mid-edit would be confusing — cancel the edit first
+    purchaseType = btn.dataset.ptype;
+    applyPurchaseTypeUI();
+    updatePurchaseForm(false);
+  });
+});
 let lastResolvedFlowerId = null;
 function updatePurchaseForm(flowerChanged){
   const m = resolveMaterialByName($("pFlower").value);
@@ -2041,6 +2112,9 @@ function updatePurchaseForm(flowerChanged){
       $("pPreview").textContent = qty ? `= ${fmtNum(qty)} stems` : "";
     }
   }
+  if(purchaseType === "return" && $("pPreview").innerHTML.trim()){
+    $("pPreview").innerHTML = `<span style="color:var(--rose-deep); font-weight:500;">Return · </span>` + $("pPreview").innerHTML;
+  }
   if((m.status || "active") === "draft"){
     $("pPreview").innerHTML += `<div style="color:var(--rose-deep); margin-top:4px;">${m.name} is marked Draft — mark it Active in Materials so it shows in the Daily Register.</div>`;
   }
@@ -2058,8 +2132,7 @@ function setPurchaseStatus(state, detail){
 }
 function resetPurchaseForm(keepDateAndVendor){
   editingPurchaseId = null;
-  $("purchaseFormTitle").textContent = "Add a purchase";
-  $("pSubmitBtn").textContent = "Add purchase";
+  applyPurchaseTypeUI();
   $("pCancelEditBtn").style.display = "none";
   $("pFlower").value = ""; $("pQty").value = ""; $("pSpb").value = ""; $("pCost").value = ""; $("pNote").value = "";
   if(!keepDateAndVendor){ $("pDate").value = todayISO(); $("pVendor").value = ""; }
@@ -2089,6 +2162,7 @@ $("purchaseForm").addEventListener("submit", (e) => {
   const vendor = $("pVendor").value.trim();
   const costRaw = $("pCost").value;
   const data = {
+    type: purchaseType,
     date, materialId: m.id, materialName: m.name,
     enteredQty: qty, enteredUnit: unit, stemsPerBunch: spb,
     baseQty, baseUnit: m.unit || "stems",
@@ -2128,8 +2202,8 @@ function startEditPurchase(id){
   const p = purchases.find(x => x.id === id);
   if(!p) return;
   editingPurchaseId = id;
-  $("purchaseFormTitle").textContent = "Edit purchase";
-  $("pSubmitBtn").textContent = "Update purchase";
+  purchaseType = p.type === "return" ? "return" : "purchase";
+  applyPurchaseTypeUI();
   $("pCancelEditBtn").style.display = "";
   $("pDate").value = p.date;
   $("pFlower").value = p.materialName || (materials.find(m => m.id === p.materialId)?.name || "");
@@ -2146,10 +2220,10 @@ function startEditPurchase(id){
 function deletePurchase(id){
   const p = purchases.find(x => x.id === id);
   if(!p) return;
-  if(!confirm(`Delete this purchase of ${p.enteredQty} ${p.enteredUnit} ${p.materialName}?`)) return;
+  if(!confirm(`Delete this ${p.type === "return" ? "return" : "purchase"} of ${p.enteredQty} ${p.enteredUnit} ${p.materialName}?`)) return;
   pendingSaves++;
   deleteDoc(doc(db, PURCHASES_COL, id))
-    .then(() => showToast("Purchase deleted."))
+    .then(() => showToast("Entry deleted."))
     .catch(err => { console.error(err); showToast(`Couldn't delete (${err.code || "error"}).`, true); })
     .finally(() => { pendingSaves--; });
 }
@@ -2157,7 +2231,9 @@ function deletePurchase(id){
 function filteredPurchases(){
   const from = $("pFilterFrom").value, to = $("pFilterTo").value;
   const term = ($("pFilterSearch").value || "").trim().toLowerCase();
+  const typeFilter = $("pFilterType").value;
   return purchases.filter(p => {
+    if(typeFilter && (p.type || "purchase") !== typeFilter) return false;
     if(from && p.date < from) return false;
     if(to && p.date > to) return false;
     if(term && !`${p.materialName||""} ${p.vendor||""}`.toLowerCase().includes(term)) return false;
@@ -2173,16 +2249,22 @@ function renderPurchases(){
   renderPurchaseOptions();
   const rows = filteredPurchases();
   $("purchaseEmpty").style.display = rows.length ? "none" : "block";
-  const totalCost = rows.reduce((sum,p) => sum + Number(p.cost||0), 0);
+  const spent = rows.filter(p => p.type !== "return").reduce((sum,p) => sum + Number(p.cost||0), 0);
+  const credit = rows.filter(p => p.type === "return").reduce((sum,p) => sum + Number(p.cost||0), 0);
+  const nReturns = rows.filter(p => p.type === "return").length;
   $("pSummary").textContent = rows.length
-    ? `${rows.length} purchase${rows.length>1?'s':''}${totalCost ? ` · ₹${fmtNum(totalCost)} total cost` : ""}`
+    ? `${rows.length - nReturns} purchase${rows.length - nReturns === 1 ? '' : 's'}${nReturns ? ` · ${nReturns} return${nReturns>1?'s':''}` : ''}`
+      + (spent ? ` · ₹${fmtNum(spent)} spent` : "") + (credit ? ` · ₹${fmtNum(credit)} credited back` : "")
     : "";
-  $("purchaseTableBody").innerHTML = rows.map(p => `
+  $("purchaseTableBody").innerHTML = rows.map(p => {
+    const isReturn = p.type === "return";
+    return `
     <tr>
       <td>${fmtDate(p.date)}</td>
+      <td><span class="tag ${isReturn ? 'return' : 'purchase'}">${isReturn ? 'Return' : 'Purchase'}</span></td>
       <td>${p.materialName || "(deleted)"}</td>
       <td>${enteredLabel(p)}</td>
-      <td class="num"><strong>${fmtNum(p.baseQty)}</strong> ${p.baseUnit || ""}</td>
+      <td class="num"><strong>${isReturn ? '−' : ''}${fmtNum(p.baseQty)}</strong> ${p.baseUnit || ""}</td>
       <td>${p.vendor || "—"}</td>
       <td class="num">${p.cost != null ? "₹" + fmtNum(p.cost) : "—"}</td>
       <td>${p.note || "—"}</td>
@@ -2190,17 +2272,18 @@ function renderPurchases(){
         <button class="btn-danger-text" style="color:var(--forest-deep);" data-p-edit="${p.id}">Edit</button>
         <button class="btn-danger-text" data-p-del="${p.id}">Delete</button>
       </td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
   $("purchaseTableBody").querySelectorAll("[data-p-edit]").forEach(b => b.addEventListener("click", () => startEditPurchase(b.dataset.pEdit)));
   $("purchaseTableBody").querySelectorAll("[data-p-del]").forEach(b => b.addEventListener("click", () => deletePurchase(b.dataset.pDel)));
 }
-["pFilterFrom","pFilterTo"].forEach(id => $(id).addEventListener("change", renderPurchases));
+["pFilterFrom","pFilterTo","pFilterType"].forEach(id => $(id).addEventListener("change", renderPurchases));
 $("pFilterSearch").addEventListener("input", renderPurchases);
 $("pExportBtn").addEventListener("click", () => {
   const rows = filteredPurchases().slice().reverse();
   if(rows.length === 0){ showToast("No purchases to export for these filters.", true); return; }
-  const out = [["Date","Flower","Entered Qty","Entered Unit","Stems per Bunch","Total","Total Unit","Vendor","Cost (₹)","Note","Entered By"]];
-  rows.forEach(p => out.push([fmtDate(p.date), p.materialName || "", p.enteredQty, p.enteredUnit || "", p.stemsPerBunch || "", p.baseQty, p.baseUnit || "", p.vendor || "", p.cost ?? "", p.note || "", p.createdBy || ""]));
+  const out = [["Date","Type","Flower","Entered Qty","Entered Unit","Stems per Bunch","Total","Total Unit","Vendor","Cost / Credit (₹)","Note","Entered By"]];
+  rows.forEach(p => out.push([fmtDate(p.date), p.type === "return" ? "Return" : "Purchase", p.materialName || "", p.enteredQty, p.enteredUnit || "", p.stemsPerBunch || "", p.baseQty, p.baseUnit || "", p.vendor || "", p.cost ?? "", p.note || "", p.createdBy || ""]));
   downloadCsv(`hanabee-purchases-${todayISO()}.csv`, out);
   showToast("Purchases exported.");
 });
